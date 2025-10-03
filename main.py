@@ -3,6 +3,7 @@ import json
 from supabase import create_client, Client
 from datetime import datetime, time
 
+TIMEZONE = 2  # GMT+2
 
 @st.cache_resource
 def init_db_connection() -> Client:
@@ -119,7 +120,7 @@ else:
     now = datetime.now()
 
     hour_min = regis_open["remediations"]["from_hour"].split("h")
-    cutoff_time = time(int(hour_min[0]), int(hour_min[1]))
+    cutoff_time = time(int(hour_min[0]) + TIMEZONE, int(hour_min[1]))
 
     days_diff = (target_date - today).days
 
