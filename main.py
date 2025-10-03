@@ -120,11 +120,10 @@ else:
     now = datetime.now()
 
     hour_min = regis_open["remediations"]["from_hour"].split("h")
-    cutoff_time = time(int(hour_min[0]) + TIMEZONE, int(hour_min[1]))
+    cutoff_time = time(int(hour_min[0]) - TIMEZONE, int(hour_min[1]))
 
     days_diff = (target_date - today).days
-    
-    st.write(now.time())
+
     if target_date != today or now.time() < cutoff_time:
         st.info("Aucune inscription pour le moment 😊")
     if 1 <= days_diff <= 3 or (target_date == today and now.time() < cutoff_time):
