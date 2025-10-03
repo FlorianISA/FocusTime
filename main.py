@@ -78,8 +78,8 @@ if not st.user.is_logged_in:
         st.login("microsoft")
 else:
     student_name = st.user.name
-    student_email = "test5@isa-florenville.be" # st.user.email
-    student_degree = 2  # 0 = not fetched yet
+    student_email = st.user.email
+    student_degree = 0  # 0 = not fetched yet
     registered_remediations = None
     registered_ateliers = None
 
