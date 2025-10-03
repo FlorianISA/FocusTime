@@ -29,9 +29,9 @@ def gen_form(title, period, place):
                 st.error("Il n'y a plus de place")
         with col2:
             if place > 0:
-                submitted = st.form_submit_button("Valider", width="stretch")
+                submitted = st.form_submit_button("S'inscrire", width="stretch")
             else:
-                submitted = st.form_submit_button("Valider", width="stretch", disabled=True)
+                submitted = st.form_submit_button("S'inscrire", width="stretch", disabled=True)
         if submitted:
             data = {
                 "email": student_email,
