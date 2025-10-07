@@ -40,8 +40,10 @@ def gen_form(title, period, place):
                 "period": period,
                 "degree": student_degree
             }
-            # TODO Refresh place before submitting to the database
-            client.table("remediations").insert(data).execute()
+            if place > 0:
+                client.table("remediations").insert(data).execute()
+            else:
+                st.toast(f"Erreur : Il n'y a plus de place pour {title}", icon="❌")
             st.rerun()
 
 def gen_registration(period: int):
