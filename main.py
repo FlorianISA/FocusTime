@@ -5,6 +5,7 @@ from supabase import create_client, Client
 from datetime import datetime
 
 TIMEZONE = 2  # GMT+2
+DEGREE_PROF = 4
 
 @st.cache_resource
 def init_db_connection() -> Client:
@@ -15,6 +16,77 @@ def init_db_connection() -> Client:
     # user = client.auth.sign_in_with_password({"email": st.secrets["USER_EMAIL"], "password": st.secrets["USER_PASS"]})
 
     return client
+
+
+@st.dialog("Inscrire un élève", width="medium")
+def select_student():
+
+    try:
+        response_email = client.table("students").select("*").execute()
+    except httpx.ReadError:
+        st.rerun()
+
+    all_emails = []
+    for email in response_email.data:
+        all_emails.append(email["email"].lower())
+
+    email = st.selectbox(
+        "Adresse email de l'élève",
+        all_emails,
+        index=None,
+        placeholder="Choisir un email"
+    )
+
+    with open("remediations.json", "r", encoding="utf-8") as file:
+        remed = json.load(file)
+    with open("remediations_p910.json", "r", encoding="utf-8") as file:
+        remed_p910 = json.load(file)
+
+    options_list = []
+    for degree, remed_names in remed.items():
+        for remed_name in remed_names.keys():
+            options_list.append(f"{remed_name} ({degree})")
+
+    option_p9 = st.selectbox(
+        "Remédiation P9",
+        options_list,
+        index=None,
+        placeholder="Choisir une remédiation"
+    )
+
+    option_p10 = st.selectbox(
+        "Remédiation P10",
+        options_list,
+        index=None,
+        placeholder="Choisir une remédiation"
+    )
+
+    st.divider()
+    if st.button("Valider"):
+        if email is not None:
+            name = email.split("@")[0].split(".")
+            name = name[0].capitalize() + " " + name[1].capitalize()
+            if option_p9 is not None:
+                data = {
+                    "email": email,
+                    "name": name,
+                    "choice": " ".join(option_p9.split()[:-1]),
+                    "period": 9,
+                    "degree": int(option_p9.split()[-1][2])
+                }
+                client.table("remediations").insert(data).execute()
+            if option_p10 is not None:
+                data = {
+                    "email": email,
+                    "name": name,
+                    "choice": " ".join(option_p10.split()[:-1]),
+                    "period": 10,
+                    "degree": int(option_p10.split()[-1][2])
+                }
+                client.table("remediations").insert(data).execute()
+            if option_p9 is not None or option_p10 is not None:
+                st.rerun()
+
 
 def gen_form(title, period, place):
     with st.form(title + f"_p{period}"):
@@ -82,7 +154,7 @@ if not st.user.is_logged_in:
 else:
     student_name = st.user.name
     student_email = st.user.email
-    student_degree = 0  # 0 = not fetched yet
+    student_degree = 0  # 0 = not fetched yet, 4 = Prof
     registered_remediations = []
     registered_ateliers = []
 
@@ -91,20 +163,21 @@ else:
 
     client = init_db_connection()
     try:
-        response = client.table("students").select("degree").ilike("email", student_email).execute()
+        response_degree = client.table("students").select("degree").ilike("email", student_email).execute()
     except httpx.ReadError:
         st.rerun()
 
-    if len(response.data) > 0:
-        student_degree = int(response.data[0]["degree"])
+    if len(response_degree.data) > 0:
+        student_degree = int(response_degree.data[0]["degree"])
+    student_degree = 4
 
     try:
-        response = client.table("remediations").select("*").execute()
+        response_remed = client.table("remediations").select("*").execute()
     except httpx.ReadError:
         st.rerun()
 
     already_registered = {}
-    for data in response.data:
+    for data in response_remed.data:
         if data["email"] == student_email:
             registered_remediations.append(data)
 
@@ -116,64 +189,97 @@ else:
 
     # region Sidebar
     st.sidebar.divider()
-    st.sidebar.write(f"Bonjour, {student_name} ! (D{student_degree})")
+    if student_degree == DEGREE_PROF:
+        st.sidebar.write(f"Bonjour, {student_name} ! (Prof)")
+    else:
+        st.sidebar.write(f"Bonjour, {student_name} ! (D{student_degree})")
 
     if st.sidebar.button("Déconnexion"):
         st.logout()
     # endregion
 
-    with open("registration_open.json", "r", encoding="utf-8") as file:
-        regis_open = json.load(file)
+    if student_degree == DEGREE_PROF:
 
-    target_time = datetime.strptime(regis_open["remediations"]["from"] + " " + regis_open["remediations"]["from_hour"],
-                                    "%d/%m/%Y %Hh%M")
-    target_time = target_time.replace(hour=target_time.hour - TIMEZONE)
+        if st.button("Inscrire un élève", width="stretch", type="primary"):
+            select_student()
+        if st.button("Voir les groupes", width="stretch"):
+            with st.container(border=True):
+                table_data = {}
+                for data in response_remed.data:
+                    if not data["choice"] in table_data:
+                        table_data[data["choice"]] = []
+                    table_data[data["choice"]].append({"name": data["name"],
+                                                       "degree": data["degree"],
+                                                       "period": data["period"]})
 
-    close_date = datetime.strptime(regis_open["remediations"]["for"],"%d/%m/%Y").date()
+                for key, value in table_data.items():
+                    st.markdown(f"**{key}**")
 
-    today = datetime.today().date()
-    now = datetime.now()
-    days_diff = (target_time.date() - today).days
-
-    atelier = False
-    remediation = False
-    if now < target_time or today >= close_date:
-        st.info("Aucune inscription pour le moment 😊")
-        if 0 <= days_diff <= 3:
-            st.info(f"Prochaine inscription le {regis_open['remediations']['from']} à {regis_open['remediations']['from_hour']}")
-        st.divider()
+                    st.dataframe(value, use_container_width=True, hide_index=True,
+                                 column_order=["name", "degree", "period"],
+                                 column_config={"name": "Prénom/Nom",
+                                                "degree": st.column_config.NumberColumn(
+                                                    "Degré",
+                                                    format="D%d",
+                                                ),
+                                                "period": st.column_config.NumberColumn(
+                                                    "Période",
+                                                    format="P%d",
+                                                )})
+                    st.divider()
     else:
-        remediation = True
+        with open("registration_open.json", "r", encoding="utf-8") as file:
+            regis_open = json.load(file)
 
-    if registered_remediations is not None or registered_ateliers is not None:
-        st.text(f"Pour le {regis_open['remediations']['for']} :")
-        for choice in registered_remediations:
-            if choice["period"] == 910:
-                st.success(f"Tu es inscrit en {choice["choice"]} (P9 et P10)")
-            else:
-                st.success(f"Tu es inscrit en {choice["choice"]} (P{choice["period"]})")
+        target_time = datetime.strptime(regis_open["remediations"]["from"] + " " + regis_open["remediations"]["from_hour"],
+                                        "%d/%m/%Y %Hh%M")
+        target_time = target_time.replace(hour=target_time.hour - TIMEZONE)
 
-            if choice["period"] == 9:
-                rem_p9 = True
-            elif choice["period"] == 10:
-                rem_p10 = True
-            elif choice["period"] == 910:
-                rem_p9 = True
-                rem_p10 = True
-        st.divider()
+        close_date = datetime.strptime(regis_open["remediations"]["for"],"%d/%m/%Y").date()
 
-    if remediation:
-        with open("remediations.json", "r", encoding="utf-8") as file:
-            remediations_list = json.load(file)
-        with open("remediations_p910.json", "r", encoding="utf-8") as file:
-            remediations_p910_list = json.load(file)
+        today = datetime.today().date()
+        now = datetime.now()
+        days_diff = (target_time.date() - today).days
 
-        if student_degree >= 2:
-            if not rem_p9:
-                gen_registration(period=9)
-            if not rem_p10:
-                gen_registration(period=10)
-            if not rem_p9 and not rem_p10:
-                gen_registration(period=910)
+        atelier = False
+        remediation = False
+        if now < target_time or today >= close_date:
+            st.info("Aucune inscription pour le moment 😊")
+            if 0 <= days_diff <= 3:
+                st.info(f"Prochaine inscription le {regis_open['remediations']['from']} à {regis_open['remediations']['from_hour']}")
+            st.divider()
         else:
-            st.info("Pas de remédiation pour toi")
+            remediation = True
+
+        if registered_remediations is not None or registered_ateliers is not None:
+            st.text(f"Pour le {regis_open['remediations']['for']} :")
+            for choice in registered_remediations:
+                if choice["period"] == 910:
+                    st.success(f"Tu es inscrit en {choice["choice"]} (P9 et P10)")
+                else:
+                    st.success(f"Tu es inscrit en {choice["choice"]} (P{choice["period"]})")
+
+                if choice["period"] == 9:
+                    rem_p9 = True
+                elif choice["period"] == 10:
+                    rem_p10 = True
+                elif choice["period"] == 910:
+                    rem_p9 = True
+                    rem_p10 = True
+            st.divider()
+
+        if remediation:
+            with open("remediations.json", "r", encoding="utf-8") as file:
+                remediations_list = json.load(file)
+            with open("remediations_p910.json", "r", encoding="utf-8") as file:
+                remediations_p910_list = json.load(file)
+
+            if student_degree >= 2:
+                if not rem_p9:
+                    gen_registration(period=9)
+                if not rem_p10:
+                    gen_registration(period=10)
+                if not rem_p9 and not rem_p10:
+                    gen_registration(period=910)
+            else:
+                st.info("Pas de remédiation pour toi")
