@@ -169,7 +169,6 @@ else:
 
     if len(response_degree.data) > 0:
         student_degree = int(response_degree.data[0]["degree"])
-    student_degree = 4
 
     try:
         response_remed = client.table("remediations").select("*").execute()
