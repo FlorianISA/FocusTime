@@ -42,8 +42,6 @@ def gen_form(title, period, place):
             }
             if place > 0:
                 client.table("remediations").insert(data).execute()
-            else:
-                st.toast(f"Erreur : Il n'y a plus de place pour {title}", icon="❌")
             st.rerun()
 
 def gen_registration(period: int):
