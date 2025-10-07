@@ -1,7 +1,8 @@
 import streamlit as st
 import json
+import httpx
 from supabase import create_client, Client
-from datetime import datetime, time
+from datetime import datetime
 
 TIMEZONE = 2  # GMT+2
 
@@ -82,24 +83,31 @@ else:
     student_name = st.user.name
     student_email = st.user.email
     student_degree = 0  # 0 = not fetched yet
-    registered_remediations = None
-    registered_ateliers = None
+    registered_remediations = []
+    registered_ateliers = []
 
     rem_p9 = False
     rem_p10 = False
 
     client = init_db_connection()
-    response = client.table("students").select("degree").ilike("email", student_email).execute()
+    try:
+        response = client.table("students").select("degree").ilike("email", student_email).execute()
+    except httpx.ReadError:
+        st.rerun()
+
     if len(response.data) > 0:
         student_degree = int(response.data[0]["degree"])
 
-    response = client.table("remediations").select("*").ilike("email", student_email).execute()
-    if len(response.data) > 0:
-        registered_remediations = response.data
+    try:
+        response = client.table("remediations").select("*").execute()
+    except httpx.ReadError:
+        st.rerun()
 
-    response = client.table("remediations").select("*").execute()
     already_registered = {}
     for data in response.data:
+        if data["email"] == student_email:
+            registered_remediations.append(data)
+
         key = data["choice"] + f" P{data['period']} D{data['degree']}"
         if key in already_registered:
             already_registered[key] += 1
