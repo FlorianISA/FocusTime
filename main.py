@@ -202,30 +202,33 @@ else:
         if st.button("Inscrire un élève", width="stretch", type="primary"):
             select_student()
         if st.button("Voir les groupes", width="stretch"):
-            with st.container(border=True):
-                table_data = {}
-                for data in response_remed.data:
-                    if not data["choice"] in table_data:
-                        table_data[data["choice"]] = []
-                    table_data[data["choice"]].append({"name": data["name"],
-                                                       "degree": data["degree"],
-                                                       "period": data["period"]})
+            if len(response_remed.data) > 0:
+                with st.container(border=True):
+                    table_data = {}
+                    for data in response_remed.data:
+                        if not data["choice"] in table_data:
+                            table_data[data["choice"]] = []
+                        table_data[data["choice"]].append({"name": data["name"],
+                                                           "degree": data["degree"],
+                                                           "period": data["period"]})
 
-                for key, value in table_data.items():
-                    st.markdown(f"**{key}**")
+                    for key, value in table_data.items():
+                        st.markdown(f"**{key}**")
 
-                    st.dataframe(value, use_container_width=True, hide_index=True,
-                                 column_order=["name", "degree", "period"],
-                                 column_config={"name": "Prénom/Nom",
-                                                "degree": st.column_config.NumberColumn(
-                                                    "Degré",
-                                                    format="D%d",
-                                                ),
-                                                "period": st.column_config.NumberColumn(
-                                                    "Période",
-                                                    format="P%d",
-                                                )})
-                    st.divider()
+                        st.dataframe(value, use_container_width=True, hide_index=True,
+                                     column_order=["name", "degree", "period"],
+                                     column_config={"name": "Prénom/Nom",
+                                                    "degree": st.column_config.NumberColumn(
+                                                        "Degré",
+                                                        format="D%d",
+                                                    ),
+                                                    "period": st.column_config.NumberColumn(
+                                                        "Période",
+                                                        format="P%d",
+                                                    )})
+                        st.divider()
+            else:
+                st.info("Aucun groupe pour l'instant")
     else:
         with open("registration_open.json", "r", encoding="utf-8") as file:
             regis_open = json.load(file)
