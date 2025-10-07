@@ -121,13 +121,15 @@ else:
                                     "%d/%m/%Y %Hh%M")
     target_time = target_time.replace(hour=target_time.hour - TIMEZONE)
 
+    close_date = datetime.strptime(regis_open["remediations"]["for"],"%d/%m/%Y").date()
+
     today = datetime.today().date()
     now = datetime.now()
     days_diff = (target_time.date() - today).days
 
     atelier = False
     remediation = False
-    if now < target_time:
+    if now < target_time or today >= close_date:
         st.info("Aucune inscription pour le moment 😊")
         if 0 <= days_diff <= 3:
             st.info(f"Prochaine inscription le {regis_open['remediations']['from']} à {regis_open['remediations']['from_hour']}")
