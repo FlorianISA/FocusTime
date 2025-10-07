@@ -40,6 +40,7 @@ def gen_form(title, period, place):
                 "period": period,
                 "degree": student_degree
             }
+            # TODO Refresh place before submitting to the database
             client.table("remediations").insert(data).execute()
             st.rerun()
 
@@ -115,20 +116,24 @@ else:
 
     with open("registration_open.json", "r", encoding="utf-8") as file:
         regis_open = json.load(file)
-    target_date = datetime.strptime(regis_open["remediations"]["from"], "%d/%m/%Y").date()
+
+    target_time = datetime.strptime(regis_open["remediations"]["from"] + " " + regis_open["remediations"]["from_hour"],
+                                    "%d/%m/%Y %Hh%M")
+    target_time = target_time.replace(hour=target_time.hour - TIMEZONE)
+
     today = datetime.today().date()
     now = datetime.now()
+    days_diff = (target_time.date() - today).days
 
-    hour_min = regis_open["remediations"]["from_hour"].split("h")
-    cutoff_time = time(int(hour_min[0]) - TIMEZONE, int(hour_min[1]))
-
-    days_diff = (target_date - today).days
-
-    if target_date != today or now.time() < cutoff_time:
+    atelier = False
+    remediation = False
+    if now < target_time:
         st.info("Aucune inscription pour le moment 😊")
-    if 1 <= days_diff <= 3 or (target_date == today and now.time() < cutoff_time):
-        st.info(f"Prochaine inscription le {regis_open['remediations']['from']} à {regis_open['remediations']['from_hour']}")
-    st.divider()
+        if 0 <= days_diff <= 3:
+            st.info(f"Prochaine inscription le {regis_open['remediations']['from']} à {regis_open['remediations']['from_hour']}")
+        st.divider()
+    else:
+        remediation = True
 
     if registered_remediations is not None or registered_ateliers is not None:
         st.text(f"Pour le {regis_open['remediations']['for']} :")
@@ -146,11 +151,6 @@ else:
                 rem_p9 = True
                 rem_p10 = True
         st.divider()
-
-    atelier = False
-    remediation = False
-    if target_date == now.date() and now.time() > cutoff_time:
-        remediation = True
 
     if remediation:
         with open("remediations.json", "r", encoding="utf-8") as file:
