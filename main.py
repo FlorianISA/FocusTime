@@ -253,7 +253,7 @@ else:
         else:
             remediation = True
 
-        if registered_remediations is not None or registered_ateliers is not None:
+        if len(registered_remediations) > 0 or len(registered_ateliers) > 0:
             st.text(f"Pour le {regis_open['remediations']['for']} :")
             for choice in registered_remediations:
                 if choice["period"] == 910:
