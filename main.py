@@ -65,7 +65,10 @@ def select_student():
     if st.button("Valider"):
         if email is not None:
             name = email.split("@")[0].split(".")
-            name = name[0].capitalize() + " " + name[1].capitalize()
+            if len(name) > 1:
+                name = name[0].capitalize() + " " + name[1].capitalize()
+            else:
+                name = name[0].capitalize()
             if option_p9 is not None:
                 data = {
                     "email": email,
