@@ -145,7 +145,7 @@ def gen_registration(period: int):
     st.divider()
 
 
-st.set_page_config(page_title="Focus Time", page_icon="📚", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Focus Time", page_icon="📚", initial_sidebar_state="auto")
 st.title("Focus Time")
 st.sidebar.text("Plateforme d'inscription aux activités du Focus Time")
 st.sidebar.image("isa_icon.jpg")
