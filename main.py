@@ -37,10 +37,13 @@ def select_student():
         placeholder="Choisir un email"
     )
 
+    if email is not None:
+        for enroll in response_remed.data:
+            if enroll["email"].lower() == email.lower():
+                st.success(f"{enroll['name']} est déjà inscrit en {enroll['choice']} (P{enroll['period']})")
+
     with open("remediations.json", "r", encoding="utf-8") as file:
         remed = json.load(file)
-    with open("remediations_p910.json", "r", encoding="utf-8") as file:
-        remed_p910 = json.load(file)
 
     options_list = []
     for degree, remed_names in remed.items():
@@ -54,12 +57,22 @@ def select_student():
         placeholder="Choisir une remédiation"
     )
 
+    if option_p9 is not None:
+        option = " ".join(option_p9.split()[:-1]) + f" P9 D{option_p9.split()[-1][2]}"
+        if option in already_registered:
+            st.info(f"{already_registered[option]} élèves déjà inscrits en {option_p9} (P9)")
+
     option_p10 = st.selectbox(
         "Remédiation P10",
         options_list,
         index=None,
         placeholder="Choisir une remédiation"
     )
+
+    if option_p10 is not None:
+        option = " ".join(option_p10.split()[:-1]) + f" P10 D{option_p10.split()[-1][2]}"
+        if option in already_registered:
+            st.info(f"{already_registered[option]} élèves déjà inscrits en {option_p10} (P10)")
 
     st.divider()
     if st.button("Valider"):
