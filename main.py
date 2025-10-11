@@ -113,7 +113,10 @@ def gen_form(title, period, place):
             if place > 3:
                 st.info(f"Il reste {place} places")
             elif place > 0:
-                st.warning(f"Il reste plus que {place} places")
+                if place > 1:
+                    st.warning(f"Il ne reste plus que {place} places")
+                else:
+                    st.warning(f"Il ne reste plus que {place} place")
             else:
                 st.error("Il n'y a plus de place")
         with col2:
