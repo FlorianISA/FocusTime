@@ -193,7 +193,7 @@ else:
 
     already_registered = {}
     for data in response_remed.data:
-        if data["email"] == student_email:
+        if data["email"].lower() == student_email.lower():
             registered_remediations.append(data)
 
         key = data["choice"] + f" P{data['period']} D{data['degree']}"
