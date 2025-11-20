@@ -4,8 +4,12 @@ import httpx
 from supabase import create_client, Client
 from datetime import datetime
 
-TIMEZONE = 2  # GMT+2
+TIMEZONE = 1  # GMT+1
 DEGREE_PROF = 4
+
+ATELIER_MODE = True
+
+# TODO Rename remediations to choice (because now it's remediations + ateliers)
 
 @st.cache_resource
 def init_db_connection() -> Client:
@@ -140,10 +144,16 @@ def gen_registration(period: int):
 
     if period == 910:
         # P9 ET P10
-        st.markdown(f"#### Remédiations P9 et P10")
+        if ATELIER_MODE:
+            st.markdown(f"#### Ateliers")
+        else:
+            st.markdown(f"#### Remédiations P9 et P10")
         choice_list = remediations_p910_list
     else:
-        st.markdown(f"#### Remédiations P{period}")
+        if ATELIER_MODE:
+            st.markdown(f"#### Remédiations P{period}")
+        else:
+            st.markdown(f"#### Ateliers P{period}")
         choice_list = remediations_list
 
     for title, place in choice_list[f"D{student_degree}"].items():
@@ -166,6 +176,7 @@ st.title("Focus Time")
 st.sidebar.text("Plateforme d'inscription aux activités du Focus Time")
 st.sidebar.image("isa_icon.jpg")
 
+# if False:
 if not st.user.is_logged_in:
     st.warning("Connecte toi avant de continuer")
     if st.button("Connexion"):
@@ -173,9 +184,10 @@ if not st.user.is_logged_in:
 else:
     student_name = st.user.name
     student_email = st.user.email
+    # student_name = "Test1"
+    # student_email = "test1@isa-florenville.be"
     student_degree = 0  # 0 = not fetched yet, 4 = Prof
     registered_remediations = []
-    registered_ateliers = []
 
     rem_p9 = False
     rem_p10 = False
@@ -218,7 +230,7 @@ else:
 
     if student_degree == DEGREE_PROF:
 
-        if st.button("Inscrire un élève", width="stretch", type="primary"):
+        if st.button("Inscrire un élève", width="stretch", type="primary", disabled=ATELIER_MODE):
             select_student()
         if st.button("Voir les groupes", width="stretch"):
             if len(response_remed.data) > 0:
@@ -262,7 +274,6 @@ else:
         now = datetime.now()
         days_diff = (target_time.date() - today).days
 
-        atelier = False
         remediation = False
         if now < target_time or today >= close_date:
             st.info("Aucune inscription pour le moment 😊")
@@ -272,7 +283,7 @@ else:
         else:
             remediation = True
 
-        if len(registered_remediations) > 0 or len(registered_ateliers) > 0:
+        if len(registered_remediations) > 0:
             st.text(f"Pour le {regis_open['remediations']['for']} :")
             for choice in registered_remediations:
                 if choice["period"] == 910:
@@ -295,12 +306,18 @@ else:
             with open("remediations_p910.json", "r", encoding="utf-8") as file:
                 remediations_p910_list = json.load(file)
 
-            if student_degree >= 2:
-                if not rem_p9:
-                    gen_registration(period=9)
-                if not rem_p10:
-                    gen_registration(period=10)
-                if not rem_p9 and not rem_p10:
-                    gen_registration(period=910)
-            else:
-                st.info("Pas de remédiation pour toi")
+            no_registration = True
+            if student_degree >= 1:
+                if len(remediations_list[f"D{student_degree}"]) > 0:
+                    if not rem_p9:
+                        gen_registration(period=9)
+                    if not rem_p10:
+                        gen_registration(period=10)
+                    no_registration = False
+                if len(remediations_p910_list[f"D{student_degree}"]) > 0:
+                    if not rem_p9 and not rem_p10:
+                        gen_registration(period=910)
+                    no_registration = False
+
+            if no_registration:
+                st.info("Aucune inscription pour toi")
