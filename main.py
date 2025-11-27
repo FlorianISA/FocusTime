@@ -7,7 +7,7 @@ from datetime import datetime
 TIMEZONE = 1  # GMT+1
 DEGREE_PROF = 4
 
-ATELIER_MODE = True
+ATELIER_MODE = False
 
 # TODO Rename remediations to choice (because now it's remediations + ateliers)
 
@@ -151,9 +151,9 @@ def gen_registration(period: int):
         choice_list = remediations_p910_list
     else:
         if ATELIER_MODE:
-            st.markdown(f"#### Remédiations P{period}")
-        else:
             st.markdown(f"#### Ateliers P{period}")
+        else:
+            st.markdown(f"#### Remédiations P{period}")
         choice_list = remediations_list
 
     for title, place in choice_list[f"D{student_degree}"].items():
