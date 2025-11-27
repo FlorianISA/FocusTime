@@ -160,7 +160,7 @@ def gen_registration(period: int):
         if title + f" P{period} D{student_degree}" in already_registered:
             place = max(place - already_registered[title + f" P{period} D{student_degree}"], 0)
         gen_form(title, period, place)
-    if "D2_D3" in choice_list:
+    if "D2_D3" in choice_list and student_degree > 1:
         for title, place in choice_list["D2_D3"].items():
             if title + f" P{period} D2" in already_registered:
                 place = max(place - already_registered[title + f" P{period} D2"], 0)
