@@ -3,27 +3,30 @@
 
   },
   "D2": {
-    "Mathématiques 3ème (Herbeuval)": 12,
-    "Mathématiques 3ème (Peltier)": 12,
-    "Sciences 3ème": 12,
-    "Anglais 3ème": 12,
-    "Français 3ème": 12,
-    "Histoire/Géo/Éco": 12,
-    "Sciences 4ème": 12,
-    "Mathématiques 4ème": 12,
-    "Français 4ème": 12,
-    "Cap réussite 4ème": 6,
-    "Remise en forme (Stretching)": 20
+    "Math 3ème (Herbeuval - Local 3A)": 12,
+    "Math 3ème (Peltier - Local 3C)": 12,
+    "Sciences 3ème (Pierazzo - Local 3B)": 12,
+    "Sciences 3ème (Motch - Local 3B)": 12,
+    "Anglais 3ème (Dominé - Local labo chimie)": 12,
+    "Français 3ème (Melinon - Local bibliothèque)": 12,
+    "Dépassement Histoire/Géo (Mahieu - Local collaboratif)": 12,
+    "Histoire/Géo/Sciences eco (Brohée - Local 4C)": 12,
+    "Math 4ème (Jonlet - Local math 6)": 12,
+    "Français 4ème (Michel - Local 4A)": 12,
+    "Remise en forme (Dumont - Local salle de gym)": 12,
+    "Cap réussite (Puig - Local Cap R)": 4,
+    "Étude (Local étude)": 30
   },
   "D3": {
-    "Mathématiques 6ème": 12,
-    "Informatique": 12,
-    "Anglais": 12,
-    "Sciences": 12,
-    "Histoire/Géo": 12,
-    "Aide TFE 6ème": 8,
-    "Mathématiques 5ème": 12,
-    "Remise en forme (Stretching)": 20
+    "Math 6ème (Claudot - Local B14)": 12,
+    "Informatique (Poot - Local petite salle info)": 12,
+    "Anglais (Lamock - Local 5B)": 12,
+    "Sciences (Baghouil - Local labo bio)": 12,
+    "Histoire/Géo (Jehenson - Local 5A)": 12,
+    "Aide TFE (Fery - Local 5B)": 8,
+    "Math 5ème (Mercken - Local 6A)": 12,
+    "Remise en forme (Laroche - Local salle de gym)": 12,
+    "Étude (Local étude)": 30
   },
   "D2_D3": {
 

@@ -181,42 +181,6 @@ if not st.user.is_logged_in:
     st.warning("Connecte toi avant de continuer")
     if st.button("Connexion"):
         st.login("microsoft")
-
-    st.divider()
-
-    client = init_db_connection()
-    try:
-        response_remed = client.table("remediations").select("*").execute()
-    except httpx.ReadError:
-        st.rerun()
-
-    if len(response_remed.data) > 0:
-        st.markdown("#### Groupes (Ateliers et remédiations)")
-
-        with st.container(border=True):
-            table_data = {}
-            for data in response_remed.data:
-                if not data["choice"] in table_data:
-                    table_data[data["choice"]] = []
-                table_data[data["choice"]].append({"name": data["name"],
-                                                   "degree": data["degree"],
-                                                   "period": data["period"]})
-
-            for key, value in table_data.items():
-                st.markdown(f"**{key}**")
-
-                st.dataframe(value, use_container_width=True, hide_index=True,
-                             column_order=["name", "degree", "period"],
-                             column_config={"name": "Prénom/Nom",
-                                            "degree": st.column_config.NumberColumn(
-                                                "Degré",
-                                                format="D%d",
-                                            ),
-                                            "period": st.column_config.NumberColumn(
-                                                "Période",
-                                                format="P%d",
-                                            )})
-                st.divider()
 else:
     student_name = st.user.name
     student_email = st.user.email
@@ -350,7 +314,7 @@ else:
                     if not rem_p10:
                         gen_registration(period=10)
                     no_registration = False
-                if len(remediations_p910_list[f"D{student_degree}"]) > 0:
+                if len(remediations_p910_list[f"D{student_degree}"]) > 0 or (len(remediations_p910_list["D2_D3"]) and student_degree >= 2):
                     if not rem_p9 and not rem_p10:
                         gen_registration(period=910)
                     no_registration = False
