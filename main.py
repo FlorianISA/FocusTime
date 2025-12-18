@@ -61,10 +61,19 @@ def select_student():
         placeholder="Choisir une remédiation"
     )
 
+    no_place_left = False
     if option_p9 is not None:
         option = " ".join(option_p9.split()[:-1]) + f" P9 D{option_p9.split()[-1][2]}"
+
+        place_total = remediations_list[f"D{option_p9.split()[-1][2]}"][" ".join(option_p9.split()[:-1])]
+
         if option in already_registered:
-            st.info(f"{already_registered[option]} élèves déjà inscrits en {option_p9} (P9)")
+            place_left = place_total - already_registered[option]
+            if place_left > 0:
+                st.info(f"{already_registered[option]} élèves déjà inscrits en {option_p9} (P9)")
+            else:
+                no_place_left = True
+                st.error("Le groupe est complet")
 
     option_p10 = st.selectbox(
         "Remédiation P10",
@@ -75,11 +84,19 @@ def select_student():
 
     if option_p10 is not None:
         option = " ".join(option_p10.split()[:-1]) + f" P10 D{option_p10.split()[-1][2]}"
+
+        place_total = remediations_list[f"D{option_p10.split()[-1][2]}"][" ".join(option_p10.split()[:-1])]
+
         if option in already_registered:
-            st.info(f"{already_registered[option]} élèves déjà inscrits en {option_p10} (P10)")
+            place_left = place_total - already_registered[option]
+            if place_left > 0:
+                st.info(f"{already_registered[option]} élèves déjà inscrits en {option_p10} (P10)")
+            else:
+                no_place_left = True
+                st.error("Le groupe est complet")
 
     st.divider()
-    if st.button("Valider"):
+    if st.button("Valider", disabled=no_place_left):
         if email is not None:
             name = email.split("@")[0].split(".")
             if len(name) > 1:
@@ -192,6 +209,11 @@ else:
     rem_p9 = False
     rem_p10 = False
 
+    with open("remediations.json", "r", encoding="utf-8") as file:
+        remediations_list = json.load(file)
+    with open("remediations_p910.json", "r", encoding="utf-8") as file:
+        remediations_p910_list = json.load(file)
+
     client = init_db_connection()
     try:
         response_degree = client.table("students").select("degree").ilike("email", student_email).execute()
@@ -301,11 +323,6 @@ else:
             st.divider()
 
         if remediation:
-            with open("remediations.json", "r", encoding="utf-8") as file:
-                remediations_list = json.load(file)
-            with open("remediations_p910.json", "r", encoding="utf-8") as file:
-                remediations_p910_list = json.load(file)
-
             no_registration = True
             if student_degree >= 1:
                 if len(remediations_list[f"D{student_degree}"]) > 0:
