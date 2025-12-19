@@ -41,9 +41,18 @@ def select_student():
         placeholder="Choisir un email"
     )
 
+    enroll_p9 = False
+    enroll_p10 = False
     if email is not None:
         for enroll in response_remed.data:
             if enroll["email"].lower() == email.lower():
+                if enroll['period'] == 9:
+                    enroll_p9 = True
+                elif enroll['period'] == 10:
+                    enroll_p10 = True
+                elif enroll['period'] == 910:
+                    enroll_p9 = True
+                    enroll_p10 = True
                 st.success(f"{enroll['name']} est déjà inscrit en {enroll['choice']} (P{enroll['period']})")
 
     with open("remediations.json", "r", encoding="utf-8") as file:
@@ -75,6 +84,10 @@ def select_student():
                 no_place_left = True
                 st.error("Le groupe est complet")
 
+        if enroll_p9:
+            no_place_left = True
+            st.error("Cet élève a déjà une inscription en P9")
+
     option_p10 = st.selectbox(
         "Remédiation P10",
         options_list,
@@ -94,6 +107,10 @@ def select_student():
             else:
                 no_place_left = True
                 st.error("Le groupe est complet")
+
+        if enroll_p10:
+            no_place_left = True
+            st.error("Cet élève a déjà une inscription en P10")
 
     st.divider()
     if st.button("Valider", disabled=no_place_left):
