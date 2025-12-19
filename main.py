@@ -46,11 +46,11 @@ def select_student():
     if email is not None:
         for enroll in response_remed.data:
             if enroll["email"].lower() == email.lower():
-                if enroll['period'] == 9:
+                if int(enroll['period']) == 9:
                     enroll_p9 = True
-                elif enroll['period'] == 10:
+                elif int(enroll['period']) == 10:
                     enroll_p10 = True
-                elif enroll['period'] == 910:
+                elif int(enroll['period']) == 910:
                     enroll_p9 = True
                     enroll_p10 = True
                 st.success(f"{enroll['name']} est déjà inscrit en {enroll['choice']} (P{enroll['period']})")
