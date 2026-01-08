@@ -7,7 +7,7 @@ from datetime import datetime
 TIMEZONE = 1  # GMT+1
 DEGREE_PROF = 4
 
-ATELIER_MODE = False
+ATELIER_MODE = True
 
 # TODO Rename remediations to choice (because now it's remediations + ateliers)
 
