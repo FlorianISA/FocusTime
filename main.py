@@ -1,3 +1,25 @@
+"""
+Application Streamlit de gestion des inscriptions au Focus Time.
+
+Cette application permet :
+- aux élèves de s’inscrire à des remédiations ou ateliers (P9, P10 ou P9+P10),
+- aux professeurs de consulter les groupes et d’inscrire manuellement des élèves,
+- de gérer les places disponibles par activité et par degré,
+- de stocker les inscriptions dans une base Supabase.
+
+Le comportement de l’application dépend :
+- du rôle de l’utilisateur (élève ou professeur),
+- de la période d’inscription ouverte,
+- du mode ATELIER_MODE (True = Inscriptions pour des ateliers, False = Inscriptions pour des remédiations).
+
+Données externes :
+(Permet de définir le nom des options et le nombre place maximum).
+- options.json : activités P9 et P10
+- options_p910.json : activités qui durent deux périodes
+- registration_open.json : fenêtre temporelle d’inscription
+"""
+
+
 import streamlit as st
 import json
 import httpx
@@ -9,10 +31,21 @@ DEGREE_PROF = 4
 
 ATELIER_MODE = True
 
-# TODO Rename remediations to choice (because now it's remediations + ateliers)
 
 @st.cache_resource
 def init_db_connection() -> Client:
+    """
+        Initialise et met en cache la connexion à la base de données Supabase.
+
+        Les identifiants sont récupérés depuis les secrets Streamlit :
+        - SUPABASE_URL
+        - SUPABASE_KEY
+
+        Returns:
+            Client: Client Supabase prêt à être utilisé pour les requêtes
+                    (tables students, options, etc.).
+    """
+
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
 
@@ -24,6 +57,14 @@ def init_db_connection() -> Client:
 
 @st.dialog("Inscrire un élève", width="medium")
 def select_student():
+    """
+        Interface professeur pour inscrire manuellement un élève.
+
+        - récupère la liste des élèves depuis la table `students`,
+        - vérifie si l’élève est déjà inscrit en P9, P10 ou P910,
+        - empêche les doubles inscriptions et les groupes complets,
+        - insère les nouvelles inscriptions dans la table `options`.
+    """
 
     try:
         response_email = client.table("students").select("*").execute()
@@ -44,7 +85,7 @@ def select_student():
     enroll_p9 = False
     enroll_p10 = False
     if email is not None:
-        for enroll in response_remed.data:
+        for enroll in response_options.data:
             if enroll["email"].lower() == email.lower():
                 if int(enroll['period']) == 9:
                     enroll_p9 = True
@@ -55,17 +96,17 @@ def select_student():
                     enroll_p10 = True
                 st.success(f"{enroll['name']} est déjà inscrit en {enroll['choice']} (P{enroll['period']})")
 
-    with open("remediations.json", "r", encoding="utf-8") as file:
-        remed = json.load(file)
+    with open("options.json", "r", encoding="utf-8") as file:
+        options = json.load(file)
 
-    options_list = []
-    for degree, remed_names in remed.items():
-        for remed_name in remed_names.keys():
-            options_list.append(f"{remed_name} ({degree})")
+    opts_list = []
+    for degree, option_names in options.items():
+        for name in option_names.keys():
+            opts_list.append(f"{name} ({degree})")
 
     option_p9 = st.selectbox(
         "Remédiation P9",
-        options_list,
+        opts_list,
         index=None,
         placeholder="Choisir une remédiation"
     )
@@ -74,7 +115,7 @@ def select_student():
     if option_p9 is not None:
         option = " ".join(option_p9.split()[:-1]) + f" P9 D{option_p9.split()[-1][2]}"
 
-        place_total = remediations_list[f"D{option_p9.split()[-1][2]}"][" ".join(option_p9.split()[:-1])]
+        place_total = opts_list[f"D{option_p9.split()[-1][2]}"][" ".join(option_p9.split()[:-1])]
 
         if option in already_registered:
             place_left = place_total - already_registered[option]
@@ -90,7 +131,7 @@ def select_student():
 
     option_p10 = st.selectbox(
         "Remédiation P10",
-        options_list,
+        opts_list,
         index=None,
         placeholder="Choisir une remédiation"
     )
@@ -98,7 +139,7 @@ def select_student():
     if option_p10 is not None:
         option = " ".join(option_p10.split()[:-1]) + f" P10 D{option_p10.split()[-1][2]}"
 
-        place_total = remediations_list[f"D{option_p10.split()[-1][2]}"][" ".join(option_p10.split()[:-1])]
+        place_total = opts_list[f"D{option_p10.split()[-1][2]}"][" ".join(option_p10.split()[:-1])]
 
         if option in already_registered:
             place_left = place_total - already_registered[option]
@@ -128,7 +169,7 @@ def select_student():
                     "period": 9,
                     "degree": int(option_p9.split()[-1][2])
                 }
-                client.table("remediations").insert(data).execute()
+                client.table("options").insert(data).execute()
             if option_p10 is not None:
                 data = {
                     "email": email,
@@ -137,12 +178,29 @@ def select_student():
                     "period": 10,
                     "degree": int(option_p10.split()[-1][2])
                 }
-                client.table("remediations").insert(data).execute()
+                client.table("options").insert(data).execute()
             if option_p9 is not None or option_p10 is not None:
                 st.rerun()
 
 
 def gen_form(title, period, place):
+    """
+        Génère un formulaire Streamlit pour une activité donnée.
+
+        Le formulaire affiche :
+        - le nom de l’activité,
+        - le nombre de places restantes,
+        - un bouton d’inscription activé ou non selon la disponibilité.
+
+        En cas de soumission valide, l’inscription est enregistrée
+        dans la table `options`.
+
+        Args:
+            title (str): Nom de l’activité.
+            period (int): Période concernée (9, 10 ou 910).
+            place (int): Nombre de places restantes.
+    """
+
     with st.form(title + f"_p{period}"):
         st.write(title)
 
@@ -171,10 +229,25 @@ def gen_form(title, period, place):
                 "degree": student_degree
             }
             if place > 0:
-                client.table("remediations").insert(data).execute()
+                client.table("options").insert(data).execute()
             st.rerun()
 
 def gen_registration(period: int):
+    """
+        Génère l’ensemble des formulaires d’inscription pour une période donnée.
+
+        Selon la période, la fonction :
+        - affiche les remédiations ou ateliers correspondants,
+        - filtre les options selon le degré de l’élève,
+        - tient compte des inscriptions déjà existantes,
+        - gère les groupes communs D2/D3.
+
+        Args:
+            period (int):
+                - 9   : remédiations / ateliers P9
+                - 10  : remédiations / ateliers P10
+                - 910 : remédiations / ateliers P9 et P10 combinés
+    """
 
     if period == 910:
         # P9 ET P10
@@ -182,13 +255,13 @@ def gen_registration(period: int):
             st.markdown(f"#### Ateliers")
         else:
             st.markdown(f"#### Remédiations P9 et P10")
-        choice_list = remediations_p910_list
+        choice_list = options_p910_list
     else:
         if ATELIER_MODE:
             st.markdown(f"#### Ateliers P{period}")
         else:
             st.markdown(f"#### Remédiations P{period}")
-        choice_list = remediations_list
+        choice_list = options_list
 
     for title, place in choice_list[f"D{student_degree}"].items():
         if title + f" P{period} D{student_degree}" in already_registered:
@@ -221,15 +294,15 @@ else:
     # student_name = "Test1"
     # student_email = "test1@isa-florenville.be"
     student_degree = 0  # 0 = not fetched yet, 4 = Prof
-    registered_remediations = []
+    registered_options = []
 
     rem_p9 = False
     rem_p10 = False
 
-    with open("remediations.json", "r", encoding="utf-8") as file:
-        remediations_list = json.load(file)
-    with open("remediations_p910.json", "r", encoding="utf-8") as file:
-        remediations_p910_list = json.load(file)
+    with open("options.json", "r", encoding="utf-8") as file:
+        options_list = json.load(file)
+    with open("options_p910.json", "r", encoding="utf-8") as file:
+        options_p910_list = json.load(file)
 
     client = init_db_connection()
     try:
@@ -241,14 +314,14 @@ else:
         student_degree = int(response_degree.data[0]["degree"])
 
     try:
-        response_remed = client.table("remediations").select("*").execute()
+        response_options = client.table("options").select("*").execute()
     except httpx.ReadError:
         st.rerun()
 
     already_registered = {}
-    for data in response_remed.data:
+    for data in response_options.data:
         if data["email"].lower() == student_email.lower():
-            registered_remediations.append(data)
+            registered_options.append(data)
 
         key = data["choice"] + f" P{data['period']} D{data['degree']}"
         if key in already_registered:
@@ -272,10 +345,10 @@ else:
         if st.button("Inscrire un élève", width="stretch", type="primary", disabled=ATELIER_MODE):
             select_student()
         if st.button("Voir les groupes", width="stretch"):
-            if len(response_remed.data) > 0:
+            if len(response_options.data) > 0:
                 with st.container(border=True):
                     table_data = {}
-                    for data in response_remed.data:
+                    for data in response_options.data:
                         if not data["choice"] in table_data:
                             table_data[data["choice"]] = []
                         table_data[data["choice"]].append({"name": data["name"],
@@ -303,28 +376,28 @@ else:
         with open("registration_open.json", "r", encoding="utf-8") as file:
             regis_open = json.load(file)
 
-        target_time = datetime.strptime(regis_open["remediations"]["from"] + " " + regis_open["remediations"]["from_hour"],
+        target_time = datetime.strptime(regis_open["from"] + " " + regis_open["from_hour"],
                                         "%d/%m/%Y %Hh%M")
         target_time = target_time.replace(hour=target_time.hour - TIMEZONE)
 
-        close_date = datetime.strptime(regis_open["remediations"]["for"],"%d/%m/%Y").date()
+        close_date = datetime.strptime(regis_open["for"],"%d/%m/%Y").date()
 
         today = datetime.today().date()
         now = datetime.now()
         days_diff = (target_time.date() - today).days
 
-        remediation = False
+        registration_open = False
         if now < target_time or today >= close_date:
             st.info("Aucune inscription pour le moment 😊")
             if 0 <= days_diff <= 3:
-                st.info(f"Prochaine inscription le {regis_open['remediations']['from']} à {regis_open['remediations']['from_hour']}")
+                st.info(f"Prochaine inscription le {regis_open['from']} à {regis_open['from_hour']}")
             st.divider()
         else:
-            remediation = True
+            registration_open = True
 
-        if len(registered_remediations) > 0:
-            st.text(f"Pour le {regis_open['remediations']['for']} :")
-            for choice in registered_remediations:
+        if len(registered_options) > 0:
+            st.text(f"Pour le {regis_open['for']} :")
+            for choice in registered_options:
                 if choice["period"] == 910:
                     st.success(f"Tu es inscrit en {choice["choice"]} (P9 et P10)")
                 else:
@@ -339,16 +412,16 @@ else:
                     rem_p10 = True
             st.divider()
 
-        if remediation:
+        if registration_open:
             no_registration = True
             if student_degree >= 1:
-                if len(remediations_list[f"D{student_degree}"]) > 0:
+                if len(options_list[f"D{student_degree}"]) > 0:
                     if not rem_p9:
                         gen_registration(period=9)
                     if not rem_p10:
                         gen_registration(period=10)
                     no_registration = False
-                if len(remediations_p910_list[f"D{student_degree}"]) > 0 or (len(remediations_p910_list["D2_D3"]) and student_degree >= 2):
+                if len(options_p910_list[f"D{student_degree}"]) > 0 or (len(options_p910_list["D2_D3"]) and student_degree >= 2):
                     if not rem_p9 and not rem_p10:
                         gen_registration(period=910)
                     no_registration = False
