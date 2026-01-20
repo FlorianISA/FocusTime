@@ -342,7 +342,7 @@ else:
 
     if student_degree == DEGREE_PROF:
 
-        if st.button("Inscrire un élève", width="stretch", type="primary", disabled=ATELIER_MODE):
+        if st.button("Inscrire un élève", width="stretch", type="primary"):
             select_student()
         if st.button("Voir les groupes", width="stretch"):
             if len(response_options.data) > 0:
@@ -428,3 +428,4 @@ else:
 
             if no_registration:
                 st.info("Aucune inscription pour toi")
+
