@@ -1,24 +1,26 @@
 {
   "D1": {
-    "Le repérage mystère": 12,
-    "Musique": 12,
-    "Jeux de société": 14,
-    "Les sciences autrement": 12,
-    "Écoteam": 12,
-    "Jeux de maniement de balles": 14,
-    "Des livres... au cinéma...": 12,
-    "Games in English!": 12,
-    "Le handisport pour tous": 14,
-    "Pause gourmande (uniquement si tu n'as jamais participé)": 10,
-    "Faisons revivre les personnages bibliques": 12
+
   },
   "D2": {
-
+    "Concours de mathématique": 15,
+    "Action-Réaction": 15,
+    "Tables de conversation en anglais": 15,
+    "Ayurvéda": 15,
+    "Ateliers d'écriture et expression orale (en français)": 15,
+    "Swissball": 15,
+    "Quiz de vocabulaire": 15,
+    "Civ City Rom": 15,
+    "Coloriage": 15
   },
   "D3": {
-
+    "Échec et mat": 12,
+    "Time's up in English": 20,
+    "Soudure pour l'électronique": 9,
+    "Blind test et jeux de société": 20,
+    "Film historique": 26
   },
   "D2_D3": {
-
+    "Projet artistique sur les légendes de la Semois": 16
   }
 }
