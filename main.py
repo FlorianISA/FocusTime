@@ -168,7 +168,7 @@ def select_student():
 
         if option in already_registered:
             place_left = place_total - already_registered[option]
-            if place_left > 0:
+            if place_total == 0 or place_left > 0:
                 st.info(f"{already_registered[option]} élèves déjà inscrits en {option_p910} (P9 et P10)")
             else:
                 no_place_left = True
