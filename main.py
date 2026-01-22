@@ -23,8 +23,12 @@ Données externes :
 import streamlit as st
 import json
 import httpx
+import string
+from io import BytesIO
+from openpyxl import Workbook
 from supabase import create_client, Client
 from datetime import datetime
+from openpyxl.styles import PatternFill, Alignment
 
 TIMEZONE = 1  # GMT+1
 DEGREE_PROF = 4
@@ -344,6 +348,44 @@ def get_not_registered():
 
     return all_email_d1, all_email_d2, all_email_d3
 
+
+def create_excel_file():
+    wb = Workbook()
+    ws = wb.active
+
+    ws.title = "D1"
+    wb.create_sheet("D2")
+    wb.create_sheet("D3")
+    wb.create_sheet("D2-D3")
+
+    alphabetic = string.ascii_uppercase
+    colors = ["FF99CC", "CC99FF", "FFCC99", "3366FF", "33CCCC"]
+
+    for sheet, degree in enumerate(["D1", "D2", "D3", "D2_D3"]):
+        wb.active = sheet
+        ws = wb.active
+        ws.row_dimensions[1].height = 50
+        # Set title
+        for index, option_name in enumerate(options_p910_list[degree]):
+            set_color = colors[index % len(colors)]
+            ws[f"{alphabetic[index]}1"] = option_name
+            ws[f"{alphabetic[index]}1"].fill = PatternFill(start_color=set_color, end_color=set_color, fill_type="solid")
+            ws[f"{alphabetic[index]}1"].alignment = Alignment(horizontal="center", vertical="center")
+            ws.column_dimensions[f"{alphabetic[index]}"].width = 40
+
+            row = 2
+            for data in response_options.data:
+                if data["choice"] == option_name:
+                    first_name = data["email"].split(".")[0].lower()
+                    name = data["email"].split("@")[0].split(".")[1].lower()
+                    ws[f"{alphabetic[index]}{row}"] = name.title() + " " + first_name.capitalize()
+                    row += 1
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    return buffer
+
+
 st.set_page_config(page_title="Focus Time", page_icon="📚", initial_sidebar_state="auto")
 st.title("Focus Time")
 st.sidebar.text("Plateforme d'inscription aux activités du Focus Time")
@@ -451,6 +493,11 @@ else:
                     with st.expander("D3"):
                         st.write(f"{len(not_reg_d3)} élèves ne sont pas inscrit")
                         st.dataframe(not_reg_d3, column_config={"value": "Prénom/Nom"})
+
+                st.download_button("Exporter en fichier Excel", width="stretch", type="primary",
+                                   data=create_excel_file,
+                                   file_name="export.xlsx",
+                                   on_click="ignore")
             else:
                 st.info("Aucun groupe pour l'instant")
     else:
