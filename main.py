@@ -278,6 +278,38 @@ def gen_registration(period: int):
     st.divider()
 
 
+def get_not_registered():
+    try:
+        all_students = client.table("students").select("*").execute()
+    except httpx.ReadError:
+        st.rerun()
+
+    all_email_d1 = []
+    all_email_d2 = []
+    all_email_d3 = []
+
+    for student in all_students.data:
+        email = student["email"].lower()
+        if student["degree"] == 1:
+            all_email_d1.append(email)
+        elif student["degree"] == 2:
+            all_email_d2.append(email)
+        elif student["degree"] == 3:
+            all_email_d3.append(email)
+
+    for student_registered in response_options.data:
+        degree = student_registered["degree"]
+        email = student_registered["email"].lower()
+
+        if degree == 1 and email in all_email_d1:
+            all_email_d1.remove(email)
+        if degree == 2 and email in all_email_d2:
+            all_email_d2.remove(email)
+        if degree == 3 and email in all_email_d3:
+            all_email_d3.remove(email)
+
+    return all_email_d1, all_email_d2, all_email_d3
+
 st.set_page_config(page_title="Focus Time", page_icon="📚", initial_sidebar_state="auto")
 st.title("Focus Time")
 st.sidebar.text("Plateforme d'inscription aux activités du Focus Time")
@@ -345,6 +377,7 @@ else:
         if st.button("Inscrire un élève", width="stretch", type="primary", disabled=ATELIER_MODE):
             select_student()
         if st.button("Voir les groupes", width="stretch"):
+            get_not_registered()
             if len(response_options.data) > 0:
                 with st.container(border=True):
                     table_data = {}
@@ -370,6 +403,20 @@ else:
                                                         format="P%d",
                                                     )})
                         st.divider()
+                with st.expander("Pas inscrit"):
+                    not_reg = get_not_registered()
+                    not_reg_d1 = [" ".join(name.split("@")[0].split(".")).title() for name in not_reg[0]]
+                    not_reg_d2 = [" ".join(name.split("@")[0].split(".")).title() for name in not_reg[1]]
+                    not_reg_d3 = [" ".join(name.split("@")[0].split(".")).title() for name in not_reg[2]]
+                    with st.expander("D1"):
+                        st.write(f"{len(not_reg_d1)} élèves ne sont pas inscrit")
+                        st.dataframe(not_reg_d1, column_config={"value": "Prénom/Nom"})
+                    with st.expander("D2"):
+                        st.write(f"{len(not_reg_d2)} élèves ne sont pas inscrit")
+                        st.dataframe(not_reg_d2, column_config={"value": "Prénom/Nom"})
+                    with st.expander("D3"):
+                        st.write(f"{len(not_reg_d3)} élèves ne sont pas inscrit")
+                        st.dataframe(not_reg_d3, column_config={"value": "Prénom/Nom"})
             else:
                 st.info("Aucun groupe pour l'instant")
     else:
