@@ -96,26 +96,28 @@ def select_student():
                     enroll_p10 = True
                 st.success(f"{enroll['name']} est déjà inscrit en {enroll['choice']} (P{enroll['period']})")
 
-    with open("options.json", "r", encoding="utf-8") as file:
-        options = json.load(file)
-
     opts_list = []
-    for degree, option_names in options.items():
+    for degree, option_names in options_list.items():
         for name in option_names.keys():
             opts_list.append(f"{name} ({degree})")
 
+    opts_list_p910 = []
+    for degree, option_names in options_p910_list.items():
+        for name in option_names.keys():
+            opts_list_p910.append(f"{name} ({degree})")
+
     option_p9 = st.selectbox(
-        "Remédiation P9",
+        "Remédiation/Atelier P9",
         opts_list,
         index=None,
-        placeholder="Choisir une remédiation"
+        placeholder="Choisir une remédiation/atelier"
     )
 
     no_place_left = False
     if option_p9 is not None:
         option = " ".join(option_p9.split()[:-1]) + f" P9 D{option_p9.split()[-1][2]}"
 
-        place_total = opts_list[f"D{option_p9.split()[-1][2]}"][" ".join(option_p9.split()[:-1])]
+        place_total = options_list[f"D{option_p9.split()[-1][2]}"][" ".join(option_p9.split()[:-1])]
 
         if option in already_registered:
             place_left = place_total - already_registered[option]
@@ -130,16 +132,16 @@ def select_student():
             st.error("Cet élève a déjà une inscription en P9")
 
     option_p10 = st.selectbox(
-        "Remédiation P10",
+        "Remédiation/Atelier P10",
         opts_list,
         index=None,
-        placeholder="Choisir une remédiation"
+        placeholder="Choisir une remédiation/atelier"
     )
 
     if option_p10 is not None:
         option = " ".join(option_p10.split()[:-1]) + f" P10 D{option_p10.split()[-1][2]}"
 
-        place_total = opts_list[f"D{option_p10.split()[-1][2]}"][" ".join(option_p10.split()[:-1])]
+        place_total = options_list[f"D{option_p10.split()[-1][2]}"][" ".join(option_p10.split()[:-1])]
 
         if option in already_registered:
             place_left = place_total - already_registered[option]
@@ -152,6 +154,29 @@ def select_student():
         if enroll_p10:
             no_place_left = True
             st.error("Cet élève a déjà une inscription en P10")
+
+    option_p910 = st.selectbox(
+        "Remédiation/Atelier P9 et P10",
+        opts_list_p910,
+        index=None,
+        placeholder="Choisir une remédiation/atelier"
+    )
+
+    if option_p910 is not None:
+        option = " ".join(option_p910.split()[:-1]) + f" P910 D{option_p910.split()[-1][2]}"
+        place_total = options_p910_list[f"D{option_p910.split()[-1][2]}"][" ".join(option_p910.split()[:-1])]
+
+        if option in already_registered:
+            place_left = place_total - already_registered[option]
+            if place_left > 0:
+                st.info(f"{already_registered[option]} élèves déjà inscrits en {option_p910} (P9 et P10)")
+            else:
+                no_place_left = True
+                st.error("Le groupe est complet")
+
+        if enroll_p9 or enroll_p10:
+            no_place_left = True
+            st.error("Cet élève a déjà une inscription en P9 ou P10")
 
     st.divider()
     if st.button("Valider", disabled=no_place_left):
@@ -179,7 +204,16 @@ def select_student():
                     "degree": int(option_p10.split()[-1][2])
                 }
                 client.table("options").insert(data).execute()
-            if option_p9 is not None or option_p10 is not None:
+            if option_p910 is not None:
+                data = {
+                    "email": email,
+                    "name": name,
+                    "choice": " ".join(option_p910.split()[:-1]),
+                    "period": 910,
+                    "degree": int(option_p910.split()[-1][2])
+                }
+                client.table("options").insert(data).execute()
+            if option_p9 is not None or option_p10 is not None or option_p910 is not None:
                 st.rerun()
 
 
