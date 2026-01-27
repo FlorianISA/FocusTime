@@ -373,13 +373,18 @@ def create_excel_file():
             ws[f"{alphabetic[index]}1"].alignment = Alignment(horizontal="center", vertical="center")
             ws.column_dimensions[f"{alphabetic[index]}"].width = 40
 
-            row = 2
+            option_group = []
             for data in response_options.data:
                 if data["choice"] == option_name:
                     first_name = data["email"].split(".")[0].lower()
                     name = data["email"].split("@")[0].split(".")[1].lower()
-                    ws[f"{alphabetic[index]}{row}"] = name.title() + " " + first_name.capitalize()
-                    row += 1
+                    option_group.append(name.title() + " " + first_name.capitalize())
+            option_group.sort()
+
+            row = 2
+            for name in option_group:
+                ws[f"{alphabetic[index]}{row}"] = name
+                row += 1
 
     buffer = BytesIO()
     wb.save(buffer)
@@ -485,13 +490,13 @@ else:
                     not_reg_d2 = [" ".join(name.split("@")[0].split(".")).title() for name in not_reg[1]]
                     not_reg_d3 = [" ".join(name.split("@")[0].split(".")).title() for name in not_reg[2]]
                     with st.expander("D1"):
-                        st.write(f"{len(not_reg_d1)} élèves ne sont pas inscrit")
+                        st.write(f"{len(not_reg_d1)} élèves ne sont pas inscrits")
                         st.dataframe(not_reg_d1, column_config={"value": "Prénom/Nom"})
                     with st.expander("D2"):
-                        st.write(f"{len(not_reg_d2)} élèves ne sont pas inscrit")
+                        st.write(f"{len(not_reg_d2)} élèves ne sont pas inscrits")
                         st.dataframe(not_reg_d2, column_config={"value": "Prénom/Nom"})
                     with st.expander("D3"):
-                        st.write(f"{len(not_reg_d3)} élèves ne sont pas inscrit")
+                        st.write(f"{len(not_reg_d3)} élèves ne sont pas inscrits")
                         st.dataframe(not_reg_d3, column_config={"value": "Prénom/Nom"})
 
                 st.download_button("Exporter en fichier Excel", width="stretch", type="primary",
