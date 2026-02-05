@@ -28,12 +28,12 @@ from io import BytesIO
 from openpyxl import Workbook
 from supabase import create_client, Client
 from datetime import datetime
-from openpyxl.styles import PatternFill, Alignment
+from openpyxl.styles import PatternFill, Alignment, Font
 
 TIMEZONE = 1  # GMT+1
 DEGREE_PROF = 4
 
-ATELIER_MODE = True
+ATELIER_MODE = False
 
 
 @st.cache_resource
@@ -350,6 +350,9 @@ def get_not_registered():
 
 
 def create_excel_file():
+
+    # TODO Create Excel for P9 and P10 options
+
     wb = Workbook()
     ws = wb.active
 
@@ -371,6 +374,7 @@ def create_excel_file():
             ws[f"{alphabetic[index]}1"] = option_name
             ws[f"{alphabetic[index]}1"].fill = PatternFill(start_color=set_color, end_color=set_color, fill_type="solid")
             ws[f"{alphabetic[index]}1"].alignment = Alignment(horizontal="center", vertical="center")
+            ws[f"{alphabetic[index]}1"].font = Font(bold=True)
             ws.column_dimensions[f"{alphabetic[index]}"].width = 40
 
             option_group = []
