@@ -351,8 +351,6 @@ def get_not_registered():
 
 def create_excel_file():
 
-    # TODO Create Excel for P9 and P10 options
-
     wb = Workbook()
     ws = wb.active
 
@@ -367,28 +365,47 @@ def create_excel_file():
     for sheet, degree in enumerate(["D1", "D2", "D3", "D2_D3"]):
         wb.active = sheet
         ws = wb.active
-        ws.row_dimensions[1].height = 50
+
+        row_offset = 1
         # Set title
-        for index, option_name in enumerate(options_p910_list[degree]):
-            set_color = colors[index % len(colors)]
-            ws[f"{alphabetic[index]}1"] = option_name
-            ws[f"{alphabetic[index]}1"].fill = PatternFill(start_color=set_color, end_color=set_color, fill_type="solid")
-            ws[f"{alphabetic[index]}1"].alignment = Alignment(horizontal="center", vertical="center")
-            ws[f"{alphabetic[index]}1"].font = Font(bold=True)
-            ws.column_dimensions[f"{alphabetic[index]}"].width = 40
+        for period in (9, 10, 910):
+            ws.row_dimensions[row_offset].height = 50
 
-            option_group = []
-            for data in response_options.data:
-                if data["choice"] == option_name:
-                    first_name = data["email"].split(".")[0].lower()
-                    name = data["email"].split("@")[0].split(".")[1].lower()
-                    option_group.append(name.title() + " " + first_name.capitalize())
-            option_group.sort()
+            row_letter = f"{alphabetic[0]}{row_offset}"
+            ws[row_letter] = f"P{period}"
+            ws[row_letter].alignment = Alignment(horizontal="center", vertical="center")
+            ws[row_letter].font = Font(bold=True)
 
-            row = 2
-            for name in option_group:
-                ws[f"{alphabetic[index]}{row}"] = name
-                row += 1
+            if period == 910:
+                options_name = options_p910_list
+            else:
+                options_name = options_list
+            row_max = 0
+            for index, option_name in enumerate(options_name[degree]):
+                row_letter = f"{alphabetic[index + 1]}{row_offset}"
+                set_color = colors[index % len(colors)]
+                ws[row_letter] = option_name
+                ws[row_letter].fill = PatternFill(start_color=set_color, end_color=set_color, fill_type="solid")
+                ws[row_letter].alignment = Alignment(horizontal="center", vertical="center")
+                ws[row_letter].font = Font(bold=True)
+                ws.column_dimensions[f"{alphabetic[index + 1]}"].width = 40
+
+                option_group = []
+                for data in response_options.data:
+                    if data["choice"] == option_name and data["period"] == period:
+                        first_name = data["email"].split(".")[0].lower()
+                        name = data["email"].split("@")[0].split(".")[1].lower()
+                        option_group.append(name.title() + " " + first_name.capitalize())
+                option_group.sort()
+
+                row = row_offset + 1
+                for name in option_group:
+                    ws[f"{alphabetic[index + 1]}{row}"] = name
+                    row += 1
+                if row > row_max:
+                    row_max = row
+
+            row_offset = row_max + 1
 
     buffer = BytesIO()
     wb.save(buffer)
@@ -400,17 +417,17 @@ st.title("Focus Time")
 st.sidebar.text("Plateforme d'inscription aux activités du Focus Time")
 st.sidebar.image("isa_icon.jpg")
 
-# if False:
-if not st.user.is_logged_in:
+if False:
+# if not st.user.is_logged_in:
     st.warning("Connecte toi avant de continuer")
     if st.button("Connexion"):
         st.login("microsoft")
 else:
-    student_name = st.user.name
-    student_email = st.user.email
-    # student_name = "Test1"
-    # student_email = "test1@isa-florenville.be"
-    student_degree = 0  # 0 = not fetched yet, 4 = Prof
+    # student_name = st.user.name
+    # student_email = st.user.email
+    student_name = "Test1"
+    student_email = "test1@isa-florenville.be"
+    student_degree = 4  # 0 = not fetched yet, 4 = Prof
     registered_options = []
 
     rem_p9 = False
