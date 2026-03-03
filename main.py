@@ -417,17 +417,17 @@ st.title("Focus Time")
 st.sidebar.text("Plateforme d'inscription aux activités du Focus Time")
 st.sidebar.image("isa_icon.jpg")
 
-if False:
-# if not st.user.is_logged_in:
+# if False:
+if not st.user.is_logged_in:
     st.warning("Connecte toi avant de continuer")
     if st.button("Connexion"):
         st.login("microsoft")
 else:
-    # student_name = st.user.name
-    # student_email = st.user.email
-    student_name = "Test1"
-    student_email = "test1@isa-florenville.be"
-    student_degree = 4  # 0 = not fetched yet, 4 = Prof
+    student_name = st.user.name
+    student_email = st.user.email
+    # student_name = "Test1"
+    # student_email = "test1@isa-florenville.be"
+    student_degree = 0  # 0 = not fetched yet, 4 = Prof
     registered_options = []
 
     rem_p9 = False
