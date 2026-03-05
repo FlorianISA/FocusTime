@@ -33,7 +33,7 @@ from openpyxl.styles import PatternFill, Alignment, Font
 TIMEZONE = 1  # GMT+1
 DEGREE_PROF = 4
 
-ATELIER_MODE = False
+ATELIER_MODE = True
 
 
 @st.cache_resource

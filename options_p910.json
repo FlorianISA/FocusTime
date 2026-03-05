@@ -1,14 +1,25 @@
 {
   "D1": {
-
+    "Art Dramatique : initions-nous à la comédie (Local C2)": 12,
+    "Pause gourmande (UNIQUEMENT si tu n'as jamais participé) (Cuisine)": 10,
+    "Coloriages magiques: révisons la grammaire autrement (Local C3)": 12,
+    "Logico games (UNIQUEMENT si tu n'as jamais participé) (Grande salle info)": 12,
+    "Jeux de société (Salle de jeux)": 12,
+    "English Games (Local E4)": 12,
+    "Ecoteam (Petite salle info)": 12,
+    "Création d'un clip musical de A à Z (Local C4)": 12,
+    "Les sciences autrement (Labo chimie)": 12,
+    "Jeux de maniement de balles (Rendez-vous sur la cours)": 12,
+    "Création d'une course d'orientation (Rendez-vous sur la cours)": 12,
+    "Films in English (Local Observatoire)": 12
   },
   "D2": {
 
   },
   "D3": {
-    "Film en anglais (Lambert - Local B14)": 20
+
   },
   "D2_D3": {
-    "Impro théâtre (Dominé C - Local Gaumaise)": 10
+
   }
 }
