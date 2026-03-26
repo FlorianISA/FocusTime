@@ -168,7 +168,7 @@ def select_student():
 
     if option_p910 is not None:
         option = " ".join(option_p910.split()[:-1]) + f" P910 D{option_p910.split()[-1][2]}"
-        place_total = options_p910_list[f"D{option_p910.split()[-1][2]}"][" ".join(option_p910.split()[:-1])]
+        place_total = options_p910_list[f"{option_p910.split()[-1][1:-1]}"][" ".join(option_p910.split()[:-1])]
 
         if option in already_registered:
             place_left = place_total - already_registered[option]
