@@ -30,7 +30,7 @@ from supabase import create_client, Client
 from datetime import datetime
 from openpyxl.styles import PatternFill, Alignment, Font
 
-TIMEZONE = 1  # GMT+1
+TIMEZONE = 2  # GMT+2
 DEGREE_PROF = 4
 
 ATELIER_MODE = True
