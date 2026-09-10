@@ -1,0 +1,10 @@
+﻿degree;name;professor;room;kind;periods;capacity;unlimited
+D1;Mathématiques;Mme Exemple;A1;remediation;9|10;8;false
+D1;Découverte des sciences;M. Exemple;Labo 1;depassement;9|10;12;false
+D1;Lecture libre;Mme Exemple;Bibliothèque;depassement;9|10;;true
+D2;Français;M. Exemple;B1;remediation;9|10;12;false
+D2;Robotique;Mme Exemple;Salle informatique;depassement;9|10;16;false
+D2;Étude;M. Exemple;Salle d'étude;depassement;9|10;;true
+D3;Anglais;Mme Exemple;C1;remediation;9|10;12;false
+D3;Débat d'actualité;M. Exemple;C2;depassement;9|10;10;false
+D3;Étude;Mme Exemple;Salle d'étude;depassement;9|10;;true

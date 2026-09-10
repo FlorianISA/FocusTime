@@ -1,585 +1,656 @@
-"""
-Application Streamlit de gestion des inscriptions au Focus Time.
+"""Focus Time : inscriptions configurables et répartition à la génération Excel."""
 
-Cette application permet :
-- aux élèves de s’inscrire à des remédiations ou ateliers (P9, P10 ou P9+P10),
-- aux professeurs de consulter les groupes et d’inscrire manuellement des élèves,
-- de gérer les places disponibles par activité et par degré,
-- de stocker les inscriptions dans une base Supabase.
-
-Le comportement de l’application dépend :
-- du rôle de l’utilisateur (élève ou professeur),
-- de la période d’inscription ouverte,
-- du mode ATELIER_MODE (True = Inscriptions pour des ateliers, False = Inscriptions pour des remédiations).
-
-Données externes :
-(Permet de définir le nom des options et le nombre place maximum).
-- options.json : activités P9 et P10
-- options_p910.json : activités qui durent deux périodes
-- registration_open.json : fenêtre temporelle d’inscription
-"""
-
+import logging
+from datetime import datetime, timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import streamlit as st
-import json
-import httpx
-import string
-from io import BytesIO
-from openpyxl import Workbook
-from supabase import create_client, Client
-from datetime import datetime
-from openpyxl.styles import PatternFill, Alignment, Font
+from supabase import create_client
 
-TIMEZONE = 2  # GMT+2
-DEGREE_PROF = 4
+from allocator import AllocationError
+from activity_import import activity_name, parse_activities
+from exports import excel_bytes
+from service import all_rows, finalize_session, session_data
 
-ATELIER_MODE = False
+ROOT = Path(__file__).parent
+TZ = ZoneInfo("Europe/Brussels")
+st.set_page_config(
+    page_title="Focus Time",
+    page_icon="📚",
+    layout="wide" if st.user.get("is_logged_in", False) else "centered",
+)
+st.title("Focus Time")
 
 
 @st.cache_resource
-def init_db_connection() -> Client:
-    """
-        Initialise et met en cache la connexion à la base de données Supabase.
-
-        Les identifiants sont récupérés depuis les secrets Streamlit :
-        - SUPABASE_URL
-        - SUPABASE_KEY
-
-        Returns:
-            Client: Client Supabase prêt à être utilisé pour les requêtes
-                    (tables students, options, etc.).
-    """
-
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
-
-    client = create_client(url, key)
-    # user = client.auth.sign_in_with_password({"email": st.secrets["USER_EMAIL"], "password": st.secrets["USER_PASS"]})
-
-    return client
+def database():
+    return create_client(
+        st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_ROLE_KEY"]
+    )
 
 
-@st.dialog("Inscrire un élève", width="medium")
-def select_student():
-    """
-        Interface professeur pour inscrire manuellement un élève.
+def error_message(exc):
+    if isinstance(exc, (AllocationError, ValueError, PermissionError)):
+        return str(exc)
+    code = getattr(exc, "code", "")
+    if code == "23505":
+        return "Cet élève a déjà une activité à cette période, ou suit déjà cette même activité à l'autre période. Une activité en double dans le catalogue est aussi refusée."
+    if code == "P0001":
+        return getattr(exc, "message", "Opération refusée.")
+    logging.error("Focus Time : %s (%s)", type(exc).__name__, code)
+    return "L'opération a échoué. Actualisez la page et vérifiez la configuration si nécessaire."
 
-        - récupère la liste des élèves depuis la table `students`,
-        - vérifie si l’élève est déjà inscrit en P9, P10 ou P910,
-        - empêche les doubles inscriptions et les groupes complets,
-        - insère les nouvelles inscriptions dans la table `options`.
-    """
 
+def action(name, args):
     try:
-        response_email = client.table("students").select("*").execute()
-    except httpx.ReadError:
+        client.rpc(name, args).execute()
+        st.session_state["notice"] = "Modification enregistrée."
         st.rerun()
+    except Exception as exc:
+        st.error(error_message(exc))
 
-    all_emails = []
-    for email in response_email.data:
-        all_emails.append(email["email"].lower())
 
-    email = st.selectbox(
-        "Adresse email de l'élève",
-        all_emails,
-        index=None,
-        placeholder="Choisir un email"
+def pupil_label(address):
+    pupil = roster_map[address]
+    return "{} · D{} · {}".format(pupil["name"], pupil["degree"], address)
+
+
+def activity_details(activity):
+    return "{} · {} · {}".format(
+        activity["name"], activity["professor"], activity["room"]
     )
 
-    enroll_p9 = False
-    enroll_p10 = False
-    if email is not None:
-        for enroll in response_options.data:
-            if enroll["email"].lower() == email.lower():
-                if int(enroll['period']) == 9:
-                    enroll_p9 = True
-                elif int(enroll['period']) == 10:
-                    enroll_p10 = True
-                elif int(enroll['period']) == 910:
-                    enroll_p9 = True
-                    enroll_p10 = True
-                st.success(f"{enroll['name']} est déjà inscrit en {enroll['choice']} (P{enroll['period']})")
 
-    opts_list = []
-    for degree, option_names in options_list.items():
-        for name in option_names.keys():
-            opts_list.append(f"{name} ({degree})")
-
-    opts_list_p910 = []
-    for degree, option_names in options_p910_list.items():
-        for name in option_names.keys():
-            opts_list_p910.append(f"{name} ({degree})")
-
-    option_p9 = st.selectbox(
-        "Remédiation/Atelier P9",
-        opts_list,
-        index=None,
-        placeholder="Choisir une remédiation/atelier"
+def activity_label(aid):
+    activity = activity_map[aid]
+    remaining = (
+        "sans limite"
+        if activity["capacity"] is None
+        else "{} place(s)".format(activity["capacity"] - counts[aid])
+    )
+    return "P{} · {} · {}".format(
+        activity["period"], activity_details(activity), remaining
     )
 
-    no_place_left = False
-    if option_p9 is not None:
-        option = " ".join(option_p9.split()[:-1]) + f" P9 D{option_p9.split()[-1][2]}"
 
-        place_total = options_list[f"D{option_p9.split()[-1][2]}"][" ".join(option_p9.split()[:-1])]
-
-        if option in already_registered:
-            place_left = place_total - already_registered[option]
-            if place_left > 0:
-                st.info(f"{already_registered[option]} élèves déjà inscrits en {option_p9} (P9)")
-            else:
-                no_place_left = True
-                st.error("Le groupe est complet")
-
-        if enroll_p9:
-            no_place_left = True
-            st.error("Cet élève a déjà une inscription en P9")
-
-    option_p10 = st.selectbox(
-        "Remédiation/Atelier P10",
-        opts_list,
-        index=None,
-        placeholder="Choisir une remédiation/atelier"
-    )
-
-    if option_p10 is not None:
-        option = " ".join(option_p10.split()[:-1]) + f" P10 D{option_p10.split()[-1][2]}"
-
-        place_total = options_list[f"D{option_p10.split()[-1][2]}"][" ".join(option_p10.split()[:-1])]
-
-        if option in already_registered:
-            place_left = place_total - already_registered[option]
-            if place_left > 0:
-                st.info(f"{already_registered[option]} élèves déjà inscrits en {option_p10} (P10)")
-            else:
-                no_place_left = True
-                st.error("Le groupe est complet")
-
-        if enroll_p10:
-            no_place_left = True
-            st.error("Cet élève a déjà une inscription en P10")
-
-    option_p910 = st.selectbox(
-        "Remédiation/Atelier P9 et P10",
-        opts_list_p910,
-        index=None,
-        placeholder="Choisir une remédiation/atelier"
-    )
-
-    if option_p910 is not None:
-        option = " ".join(option_p910.split()[:-1]) + f" P910 D{option_p910.split()[-1][2]}"
-        place_total = options_p910_list[f"{option_p910.split()[-1][1:-1]}"][" ".join(option_p910.split()[:-1])]
-
-        if option in already_registered:
-            place_left = place_total - already_registered[option]
-            if place_total == 0 or place_left > 0:
-                st.info(f"{already_registered[option]} élèves déjà inscrits en {option_p910} (P9 et P10)")
-            else:
-                no_place_left = True
-                st.error("Le groupe est complet")
-
-        if enroll_p9 or enroll_p10:
-            no_place_left = True
-            st.error("Cet élève a déjà une inscription en P9 ou P10")
-
-    st.divider()
-    if st.button("Valider", disabled=no_place_left):
-        if email is not None:
-            name = email.split("@")[0].split(".")
-            if len(name) > 1:
-                name = name[0].capitalize() + " " + name[1].capitalize()
-            else:
-                name = name[0].capitalize()
-            if option_p9 is not None:
-                data = {
-                    "email": email,
-                    "name": name,
-                    "choice": " ".join(option_p9.split()[:-1]),
-                    "period": 9,
-                    "degree": int(option_p9.split()[-1][2])
-                }
-                client.table("options").insert(data).execute()
-            if option_p10 is not None:
-                data = {
-                    "email": email,
-                    "name": name,
-                    "choice": " ".join(option_p10.split()[:-1]),
-                    "period": 10,
-                    "degree": int(option_p10.split()[-1][2])
-                }
-                client.table("options").insert(data).execute()
-            if option_p910 is not None:
-                data = {
-                    "email": email,
-                    "name": name,
-                    "choice": " ".join(option_p910.split()[:-1]),
-                    "period": 910,
-                    "degree": int(option_p910.split()[-1][2])
-                }
-                client.table("options").insert(data).execute()
-            if option_p9 is not None or option_p10 is not None or option_p910 is not None:
-                st.rerun()
-
-
-def gen_form(title, period, place):
-    """
-        Génère un formulaire Streamlit pour une activité donnée.
-
-        Le formulaire affiche :
-        - le nom de l’activité,
-        - le nombre de places restantes,
-        - un bouton d’inscription activé ou non selon la disponibilité.
-
-        En cas de soumission valide, l’inscription est enregistrée
-        dans la table `options`.
-
-        Args:
-            title (str): Nom de l’activité.
-            period (int): Période concernée (9, 10 ou 910).
-            place (int): Nombre de places restantes.
-    """
-
-    with st.form(title + f"_p{period}"):
-        st.write(title)
-
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            if place > 3:
-                st.info(f"Il reste {place} places")
-            elif place > 0:
-                if place > 1:
-                    st.warning(f"Il ne reste plus que {place} places")
-                else:
-                    st.warning(f"Il ne reste plus que {place} place")
-            else:
-                st.error("Il n'y a plus de place")
-        with col2:
-            if place > 0:
-                submitted = st.form_submit_button("S'inscrire", width="stretch")
-            else:
-                submitted = st.form_submit_button("S'inscrire", width="stretch", disabled=True)
-        if submitted:
-            data = {
-                "email": student_email,
-                "name": student_name,
-                "choice": title,
-                "period": period,
-                "degree": student_degree
-            }
-            if place > 0:
-                client.table("options").insert(data).execute()
-            st.rerun()
-
-def gen_registration(period: int):
-    """
-        Génère l’ensemble des formulaires d’inscription pour une période donnée.
-
-        Selon la période, la fonction :
-        - affiche les remédiations ou ateliers correspondants,
-        - filtre les options selon le degré de l’élève,
-        - tient compte des inscriptions déjà existantes,
-        - gère les groupes communs D2/D3.
-
-        Args:
-            period (int):
-                - 9   : remédiations / ateliers P9
-                - 10  : remédiations / ateliers P10
-                - 910 : remédiations / ateliers P9 et P10 combinés
-    """
-
-    if period == 910:
-        # P9 ET P10
-        if ATELIER_MODE:
-            st.markdown(f"#### Ateliers")
-        else:
-            st.markdown(f"#### Remédiations P9 et P10")
-        choice_list = options_p910_list
-    else:
-        if ATELIER_MODE:
-            st.markdown(f"#### Ateliers P{period}")
-        else:
-            st.markdown(f"#### Remédiations P{period}")
-        choice_list = options_list
-
-    for title, place in choice_list[f"D{student_degree}"].items():
-        if title + f" P{period} D{student_degree}" in already_registered:
-            place = max(place - already_registered[title + f" P{period} D{student_degree}"], 0)
-        gen_form(title, period, place)
-    if "D2_D3" in choice_list and student_degree > 1:
-        for title, place in choice_list["D2_D3"].items():
-            if title + f" P{period} D2" in already_registered:
-                place = max(place - already_registered[title + f" P{period} D2"], 0)
-            if title + f" P{period} D3" in already_registered:
-                place = max(place - already_registered[title + f" P{period} D3"], 0)
-            gen_form(title, period, place)
-
-    st.divider()
-
-
-def get_not_registered():
-    try:
-        all_students = client.table("students").select("*").execute()
-    except httpx.ReadError:
-        st.rerun()
-
-    all_email_d1 = []
-    all_email_d2 = []
-    all_email_d3 = []
-
-    for student in all_students.data:
-        email = student["email"].lower()
-        if student["degree"] == 1:
-            all_email_d1.append(email)
-        elif student["degree"] == 2:
-            all_email_d2.append(email)
-        elif student["degree"] == 3:
-            all_email_d3.append(email)
-
-    for student_registered in response_options.data:
-        degree = student_registered["degree"]
-        email = student_registered["email"].lower()
-
-        if degree == 1 and email in all_email_d1:
-            all_email_d1.remove(email)
-        if degree == 2 and email in all_email_d2:
-            all_email_d2.remove(email)
-        if degree == 3 and email in all_email_d3:
-            all_email_d3.remove(email)
-
-    return all_email_d1, all_email_d2, all_email_d3
-
-
-def create_excel_file():
-
-    wb = Workbook()
-    ws = wb.active
-
-    ws.title = "D1"
-    wb.create_sheet("D2")
-    wb.create_sheet("D3")
-    wb.create_sheet("D2-D3")
-
-    alphabetic = string.ascii_uppercase
-    colors = ["FF99CC", "CC99FF", "FFCC99", "3366FF", "33CCCC"]
-
-    for sheet, degree in enumerate(["D1", "D2", "D3", "D2_D3"]):
-        wb.active = sheet
-        ws = wb.active
-
-        row_offset = 1
-        # Set title
-        for period in (9, 10, 910):
-            ws.row_dimensions[row_offset].height = 50
-
-            row_letter = f"{alphabetic[0]}{row_offset}"
-            ws[row_letter] = f"P{period}"
-            ws[row_letter].alignment = Alignment(horizontal="center", vertical="center")
-            ws[row_letter].font = Font(bold=True)
-
-            if period == 910:
-                options_name = options_p910_list
-            else:
-                options_name = options_list
-            row_max = 0
-            for index, option_name in enumerate(options_name[degree]):
-                row_letter = f"{alphabetic[index + 1]}{row_offset}"
-                set_color = colors[index % len(colors)]
-                ws[row_letter] = option_name
-                ws[row_letter].fill = PatternFill(start_color=set_color, end_color=set_color, fill_type="solid")
-                ws[row_letter].alignment = Alignment(horizontal="center", vertical="center")
-                ws[row_letter].font = Font(bold=True)
-                ws.column_dimensions[f"{alphabetic[index + 1]}"].width = 40
-
-                option_group = []
-                for data in response_options.data:
-                    if data["choice"] == option_name and data["period"] == period:
-                        first_name = data["email"].split(".")[0].lower()
-                        name = data["email"].split("@")[0].split(".")[1].lower()
-                        option_group.append(name.title() + " " + first_name.capitalize())
-                option_group.sort()
-
-                row = row_offset + 1
-                for name in option_group:
-                    ws[f"{alphabetic[index + 1]}{row}"] = name
-                    row += 1
-                if row > row_max:
-                    row_max = row
-
-            row_offset = row_max + 1
-
-    buffer = BytesIO()
-    wb.save(buffer)
-    return buffer
-
-
-st.set_page_config(page_title="Focus Time", page_icon="📚", initial_sidebar_state="auto")
-st.title("Focus Time")
-st.sidebar.text("Plateforme d'inscription aux activités du Focus Time")
-st.sidebar.image("isa_icon.jpg")
-
-# if False:
-if not st.user.is_logged_in:
-    st.warning("Connecte toi avant de continuer")
-    if st.button("Connexion"):
+if not st.user.get("is_logged_in", False):
+    st.info("Connectez-vous avec votre compte Microsoft scolaire.")
+    if st.button("Se connecter avec Microsoft", type="primary"):
         st.login("microsoft")
-else:
-    student_name = st.user.name
-    student_email = st.user.email
-    # student_name = "Test1"
-    # student_email = "test1@isa-florenville.be"
-    student_degree = 0  # 0 = not fetched yet, 4 = Prof
-    registered_options = []
+    st.stop()
+email = (
+    str(st.user.get("email") or st.user.get("preferred_username") or "").strip().lower()
+)
+if not email:
+    st.error(
+        "Le compte Microsoft ne fournit pas d'adresse permettant de vous identifier."
+    )
+    st.stop()
+try:
+    client = database()
+    people = client.table("ft2_people").select("*").eq("email", email).execute().data
+    if len(people) != 1:
+        st.error(
+            "Votre compte n'est pas autorisé. Contactez le responsable du Focus Time."
+        )
+        st.stop()
+    person = people[0]
+    teacher = person["degree"] == 4
+    admin = teacher and person["is_admin"]
+    sessions = all_rows(client, "ft2_sessions")
+except Exception as exc:
+    st.error(error_message(exc))
+    st.stop()
+st.sidebar.write(
+    "Plateforme d'inscription aux activités du Focus Time"
+)
+st.sidebar.image(str(ROOT / "isa_icon.jpg"), width=200)
+st.sidebar.write(person["name"])
+st.sidebar.caption(
+    "Administrateur" if admin else ("Professeur" if teacher else "Élève")
+)
+if st.sidebar.button("Se déconnecter"):
+    st.logout()
+if "notice" in st.session_state:
+    st.toast(st.session_state.pop("notice"))
 
-    rem_p9 = False
-    rem_p10 = False
+if admin:
+    with st.expander("Créer une séance"):
+        st.caption(
+            "La séance démarre sans activité. Ajoutez ensuite les remédiations et dépassements pour chaque degré dans Gestion des activités."
+        )
+        with st.form("create_session"):
+            title = st.text_input("Nom de la séance", "Focus Time")
+            today = datetime.now(TZ).date()
+            event = st.date_input(
+                "Date des activités", today + timedelta(days=7), format="DD/MM/YYYY"
+            )
+            c1, c2 = st.columns(2)
+            with c1:
+                open_date = st.date_input(
+                    "Ouverture des inscriptions", today, format="DD/MM/YYYY"
+                )
+                open_time = st.time_input(
+                    "Heure d'ouverture", datetime.strptime("08:00", "%H:%M").time()
+                )
+            with c2:
+                close_date = st.date_input(
+                    "Fin des inscriptions",
+                    today + timedelta(days=6),
+                    format="DD/MM/YYYY",
+                )
+                close_time = st.time_input(
+                    "Heure de fin", datetime.strptime("16:00", "%H:%M").time()
+                )
+            degrees = st.multiselect(
+                "Degrés participants",
+                [1, 2, 3],
+                default=[2, 3],
+                format_func=lambda d: f"D{d}",
+                placeholder="Choisir les degrés participants",
+            )
+            allow_students = st.checkbox("Autoriser les élèves à s'inscrire eux-mêmes")
+            allow_enrichment = st.checkbox(
+                "Autoriser les inscriptions aux dépassements"
+            )
+            submitted = st.form_submit_button("Créer la séance", type="primary")
+        if submitted:
+            try:
+                opens = datetime.combine(open_date, open_time, TZ)
+                closes = datetime.combine(close_date, close_time, TZ)
+                if (
+                    not title.strip()
+                    or not degrees
+                    or opens >= closes
+                    or closes.date() > event
+                ):
+                    raise ValueError(
+                        "Vérifiez le nom, les degrés et les dates d'ouverture/fin des inscriptions."
+                    )
+                action(
+                    "ft2_create_session",
+                    {
+                        "p_actor": email,
+                        "p_title": title.strip(),
+                        "p_date": event.isoformat(),
+                        "p_opens": opens.isoformat(),
+                        "p_closes": closes.isoformat(),
+                        "p_degrees": degrees,
+                        "p_allow_student_enrollment": allow_students,
+                        "p_allow_enrichment_enrollment": allow_enrichment,
+                    },
+                )
+            except Exception as exc:
+                st.error(error_message(exc))
 
-    with open("options.json", "r", encoding="utf-8") as file:
-        options_list = json.load(file)
-    with open("options_p910.json", "r", encoding="utf-8") as file:
-        options_p910_list = json.load(file)
+if not sessions:
+    st.info("Aucune séance n'a encore été créée.")
+    st.stop()
+sessions.sort(key=lambda s: (s["event_date"], s["id"]), reverse=True)
+session_labels = {
+    s["id"]: "{} · {}".format(
+        datetime.fromisoformat(s["event_date"]).strftime("%d/%m/%Y"), s["title"]
+    )
+    for s in sessions
+}
+selected = st.selectbox(
+    "Séance",
+    list(session_labels),
+    format_func=session_labels.get,
+    placeholder="Choisir une séance",
+)
+session = next(s for s in sessions if s["id"] == selected)
+try:
+    activities = all_rows(client, "ft2_activities", session_id=selected)
+    filters = {} if teacher else {"email": email}
+    assignments = all_rows(client, "ft2_assignments", session_id=selected)
+    counts = {
+        a["id"]: sum(r["activity_id"] == a["id"] for r in assignments)
+        for a in activities
+    }
+    if not teacher:
+        assignments = [r for r in assignments if r["email"] == email]
+    roster = all_rows(client, "ft2_roster", session_id=selected, **filters)
+except Exception as exc:
+    st.error(error_message(exc))
+    st.stop()
+activity_map = {a["id"]: a for a in activities}
+roster_map = {r["email"]: r for r in roster}
+opens = datetime.fromisoformat(session["opens_at"].replace("Z", "+00:00")).astimezone(
+    TZ
+)
+closes = datetime.fromisoformat(session["closes_at"].replace("Z", "+00:00")).astimezone(
+    TZ
+)
+can_enroll = session["status"] == "open" and opens <= datetime.now(TZ) < closes
+st.caption(
+    f"Inscriptions du {opens:%d/%m/%Y à %H:%M} au {closes:%d/%m/%Y à %H:%M}"
+)
+if session["status"] == "finalized":
+    st.success("La répartition est enregistrée et les groupes sont fixés.")
+elif not can_enroll:
+    st.info(
+        "Les inscriptions sont fermées. La répartition attend la génération de l'Excel par l'administrateur."
+    )
 
-    client = init_db_connection()
-    try:
-        response_degree = client.table("students").select("degree").ilike("email", student_email).execute()
-    except httpx.ReadError:
-        st.rerun()
-
-    if len(response_degree.data) > 0:
-        student_degree = int(response_degree.data[0]["degree"])
-
-    try:
-        response_options = client.table("options").select("*").execute()
-    except httpx.ReadError:
-        st.rerun()
-
-    already_registered = {}
-    for data in response_options.data:
-        if data["email"].lower() == student_email.lower():
-            registered_options.append(data)
-
-        key = data["choice"] + f" P{data['period']} D{data['degree']}"
-        if key in already_registered:
-            already_registered[key] += 1
+if not teacher:
+    st.subheader("Mes activités")
+    if not roster:
+        st.info("Vous ne participez pas à cette séance.")
+    for period in (9, 10):
+        found = next((a for a in assignments if a["period"] == period), None)
+        if found:
+            st.success(
+                "P{} · {}".format(
+                    period, activity_details(activity_map[found["activity_id"]])
+                )
+            )
+        elif roster:
+            st.info(f"P{period} · Aucune activité pour l'instant.")
+    if roster and session.get("allow_student_enrollment", False):
+        st.subheader("M'inscrire à une activité")
+        st.caption(
+            "Vous pouvez annuler vos propres inscriptions. Les inscriptions faites par un professeur ne sont pas annulables."
+        )
+        for row in assignments:
+            if row["source"] == "student" and row["created_by"] == email:
+                if st.button(
+                    "Annuler mon inscription en P{}".format(row["period"]),
+                    key="cancel_{}".format(row["id"]),
+                    disabled=not can_enroll,
+                ):
+                    action("ft2_cancel", {"p_actor": email, "p_assignment": row["id"]})
+        occupied_periods = {r["period"] for r in assignments}
+        chosen_names = {
+            activity_name(activity_map[r["activity_id"]]["name"]) for r in assignments
+        }
+        compatible = [
+            a
+            for a in activities
+            if a["degree"] == roster_map[email]["degree"]
+            and (
+                a["kind"] == "remediation"
+                or session.get("allow_enrichment_enrollment", False)
+            )
+            and a["period"] not in occupied_periods
+            and activity_name(a["name"]) not in chosen_names
+            and (a["capacity"] is None or counts[a["id"]] < a["capacity"])
+        ]
+        if compatible:
+            chosen = st.selectbox(
+                "Activité",
+                [a["id"] for a in compatible],
+                format_func=activity_label,
+                placeholder="Choisir une activité",
+            )
+            if st.button("M'inscrire", type="primary", disabled=not can_enroll):
+                action(
+                    "ft2_enroll",
+                    {
+                        "p_actor": email,
+                        "p_session": selected,
+                        "p_email": email,
+                        "p_activity": chosen,
+                    },
+                )
         else:
-            already_registered[key] = 1
+            st.info("Aucune activité compatible disponible à une période libre.")
+    st.stop()
 
-    # region Sidebar
-    st.sidebar.divider()
-    if student_degree == DEGREE_PROF:
-        st.sidebar.write(f"Bonjour, {student_name} ! (Prof)")
-    else:
-        st.sidebar.write(f"Bonjour, {student_name} ! (D{student_degree})")
+if admin:
+    with st.expander("Supprimer la séance"):
+        st.warning(
+            "Cette action supprime définitivement la séance sélectionnée, ses activités et toutes ses inscriptions."
+        )
+        if st.button(
+            "Supprimer définitivement cette séance",
+            key=f"delete_session_{selected}",
+        ):
+            try:
+                client.rpc(
+                    "ft2_delete_session", {"p_actor": email, "p_session": selected}
+                ).execute()
+                st.session_state.pop("excel_{}_{}".format(email, selected), None)
+                st.session_state["notice"] = "Séance supprimée."
+                st.rerun()
+            except Exception as exc:
+                st.error(error_message(exc))
 
-    if st.sidebar.button("Déconnexion"):
-        st.logout()
-    # endregion
-
-    if student_degree == DEGREE_PROF:
-
-        if st.button("Inscrire un élève", width="stretch", type="primary"):
-            select_student()
-        if st.button("Voir les groupes", width="stretch"):
-            get_not_registered()
-            if len(response_options.data) > 0:
-                with st.container(border=True):
-                    table_data = {}
-                    for data in response_options.data:
-                        if not data["choice"] in table_data:
-                            table_data[data["choice"]] = []
-                        table_data[data["choice"]].append({"name": data["name"],
-                                                           "degree": data["degree"],
-                                                           "period": data["period"]})
-
-                    for key, value in table_data.items():
-                        st.markdown(f"**{key}**")
-
-                        st.dataframe(value, use_container_width=True, hide_index=True,
-                                     column_order=["name", "degree", "period"],
-                                     column_config={"name": "Prénom/Nom",
-                                                    "degree": st.column_config.NumberColumn(
-                                                        "Degré",
-                                                        format="D%d",
-                                                    ),
-                                                    "period": st.column_config.NumberColumn(
-                                                        "Période",
-                                                        format="P%d",
-                                                    )})
-                        st.divider()
-                with st.expander("Pas inscrit"):
-                    not_reg = get_not_registered()
-                    not_reg_d1 = [" ".join(name.split("@")[0].split(".")).title() for name in not_reg[0]]
-                    not_reg_d2 = [" ".join(name.split("@")[0].split(".")).title() for name in not_reg[1]]
-                    not_reg_d3 = [" ".join(name.split("@")[0].split(".")).title() for name in not_reg[2]]
-                    with st.expander("D1"):
-                        st.write(f"{len(not_reg_d1)} élèves ne sont pas inscrits")
-                        st.dataframe(not_reg_d1, column_config={"value": "Prénom/Nom"})
-                    with st.expander("D2"):
-                        st.write(f"{len(not_reg_d2)} élèves ne sont pas inscrits")
-                        st.dataframe(not_reg_d2, column_config={"value": "Prénom/Nom"})
-                    with st.expander("D3"):
-                        st.write(f"{len(not_reg_d3)} élèves ne sont pas inscrits")
-                        st.dataframe(not_reg_d3, column_config={"value": "Prénom/Nom"})
-
-                st.download_button("Exporter en fichier Excel", width="stretch", type="primary",
-                                   data=create_excel_file,
-                                   file_name="export.xlsx",
-                                   on_click="ignore")
-            else:
-                st.info("Aucun groupe pour l'instant")
-    else:
-        with open("registration_open.json", "r", encoding="utf-8") as file:
-            regis_open = json.load(file)
-
-        target_time = datetime.strptime(regis_open["from"] + " " + regis_open["from_hour"],
-                                        "%d/%m/%Y %Hh%M")
-        target_time = target_time.replace(hour=target_time.hour - TIMEZONE)
-
-        close_date = datetime.strptime(regis_open["for"],"%d/%m/%Y").date()
-
-        today = datetime.today().date()
-        now = datetime.now()
-        days_diff = (target_time.date() - today).days
-
-        registration_open = False
-        if now < target_time or today >= close_date:
-            st.info("Aucune inscription pour le moment 😊")
-            if 0 <= days_diff <= 3:
-                st.info(f"Prochaine inscription le {regis_open['from']} à {regis_open['from_hour']}")
-            st.divider()
+if admin:
+    with st.expander("Gestion des activités", expanded=not activities):
+        if session["status"] == "finalized":
+            st.info(
+                "Les activités d'une séance finalisée ne peuvent plus être ajoutées ou supprimées."
+            )
         else:
-            registration_open = True
-
-        if len(registered_options) > 0:
-            st.text(f"Pour le {regis_open['for']} :")
-            for choice in registered_options:
-                if choice["period"] == 910:
-                    st.success(f"Tu es inscrit en {choice["choice"]} (P9 et P10)")
+            with st.form("add_activity"):
+                group_degree = st.selectbox(
+                    "Degré de l'activité",
+                    sorted({r["degree"] for r in roster}),
+                    format_func=lambda d: f"D{d}",
+                    placeholder="Choisir un degré",
+                )
+                kind = st.selectbox(
+                    "Type d'activité",
+                    ["remediation", "depassement"],
+                    format_func=lambda k: (
+                        "Remédiation" if k == "remediation" else "Dépassement"
+                    ),
+                    placeholder="Choisir un type d'activité",
+                )
+                name = st.text_input("Nom de l'activité")
+                professor = st.text_input("Professeur")
+                room = st.text_input("Local")
+                unlimited = st.checkbox("Sans limite de places")
+                capacity = st.number_input(
+                    "Nombre maximum de places",
+                    min_value=1,
+                    max_value=2147483647,
+                    value=12,
+                    step=1,
+                )
+                st.caption(
+                    "Si Sans limite de places est coché, le nombre maximum est ignoré."
+                )
+                group_periods = st.multiselect(
+                    "Périodes proposées",
+                    [9, 10],
+                    default=[9, 10],
+                    format_func=lambda p: f"P{p}",
+                    placeholder="Choisir les périodes",
+                )
+                submitted = st.form_submit_button("Ajouter l'activité", type="primary")
+            if submitted:
+                if not group_periods or not all(
+                    v.strip() for v in (name, professor, room)
+                ):
+                    st.error(
+                        "Renseignez le nom, le professeur, le local et au moins une période."
+                    )
                 else:
-                    st.success(f"Tu es inscrit en {choice["choice"]} (P{choice["period"]})")
+                    action(
+                        "ft2_add_activity",
+                        {
+                            "p_actor": email,
+                            "p_session": selected,
+                            "p_name": name,
+                            "p_professor": professor,
+                            "p_room": room,
+                            "p_kind": kind,
+                            "p_periods": group_periods,
+                            "p_degree": group_degree,
+                            "p_capacity": None if unlimited else int(capacity),
+                        },
+                    )
+            with st.expander("Importer plusieurs activités depuis un CSV"):
+                upload = st.file_uploader(
+                    "Fichier d'activités", type=["csv"], key="activities_upload"
+                )
+                if upload is not None:
+                    try:
+                        imported = parse_activities(
+                            upload.getvalue(), {r["degree"] for r in roster}
+                        )
+                        existing = {
+                            (a["degree"], a["period"], activity_name(a["name"]))
+                            for a in activities
+                        }
+                        if any(
+                            (a["degree"], a["period"], activity_name(a["name"]))
+                            in existing
+                            for a in imported
+                        ):
+                            raise ValueError(
+                                "Un nom existe déjà pour le même degré et la même période. Retirez ce doublon du fichier avant l'import."
+                            )
+                        st.dataframe(
+                            imported,
+                            hide_index=True,
+                            width="stretch",
+                            column_config={
+                                "name": "Nom",
+                                "professor": "Professeur",
+                                "room": "Local",
+                                "degree": "Degré",
+                                "period": "Période",
+                                "kind": "Type",
+                                "capacity": "Places (vide = illimité)",
+                            },
+                        )
+                        if st.button("Importer les activités", type="primary"):
+                            action(
+                                "ft2_import_activities",
+                                {
+                                    "p_actor": email,
+                                    "p_session": selected,
+                                    "p_activities": imported,
+                                },
+                            )
+                    except ValueError as exc:
+                        st.error(str(exc))
+            if not activities:
+                st.info(
+                    "Aucune activité. Ajoutez vos remédiations et dépassements pour chaque degré, ou importez un fichier CSV."
+                )
+            else:
+                st.caption(
+                    "La suppression retire un groupe d'une période. Si des élèves y sont inscrits, annulez d'abord leurs inscriptions."
+                )
+                labels = {
+                    a["id"]: "D{} · P{} · {} ({})".format(
+                        a["degree"],
+                        a["period"],
+                        a["name"],
+                        "remédiation" if a["kind"] == "remediation" else "dépassement",
+                    )
+                    for a in activities
+                }
+                deletion = st.selectbox(
+                    "Activité à supprimer",
+                    list(labels),
+                    format_func=labels.get,
+                    index=None,
+                    placeholder="Choisir une activité à supprimer",
+                )
+                assigned = deletion is not None and any(
+                    a["activity_id"] == deletion for a in assignments
+                )
+                if assigned:
+                    st.warning(
+                        "Ce groupe contient des élèves : sa suppression est bloquée."
+                    )
+                if st.button(
+                    "Supprimer cette activité", disabled=deletion is None or assigned
+                ):
+                    action(
+                        "ft2_delete_activity",
+                        {"p_actor": email, "p_activity": deletion},
+                    )
 
-                if choice["period"] == 9:
-                    rem_p9 = True
-                elif choice["period"] == 10:
-                    rem_p10 = True
-                elif choice["period"] == 910:
-                    rem_p9 = True
-                    rem_p10 = True
-            st.divider()
+counts = {
+    a["id"]: sum(r["activity_id"] == a["id"] for r in assignments) for a in activities
+}
+occupied = {(r["email"], r["period"]) for r in assignments}
+used = {
+    (r["email"], activity_name(activity_map[r["activity_id"]]["name"]))
+    for r in assignments
+}
+missing = [
+    {"Élève": r["name"], "Degré": r["degree"], "Période": p}
+    for r in roster
+    for p in (9, 10)
+    if (r["email"], p) not in occupied
+]
+c1, c2, c3 = st.columns(3)
+c1.metric("Élèves concernés", len(roster))
+c2.metric(
+    "Inscriptions en remédiation",
+    sum(activity_map[a["activity_id"]]["kind"] == "remediation" for a in assignments),
+)
+c3.metric("Périodes à attribuer", len(missing))
+tabs = st.tabs(
+    ["Inscrire un élève", "Groupes par degré"]
+    + (["Répartition et Excel"] if admin else [])
+)
+tab_enroll, tab_groups = tabs[:2]
+with tab_enroll:
+    if not can_enroll:
+        st.info("Inscription et annulation disponibles pendant la période d'ouverture.")
+    degree_filter = st.selectbox(
+        "Degré de l'élève",
+        [1, 2, 3],
+        index=1,
+        format_func=lambda d: f"D{d}",
+        placeholder="Choisir un degré",
+    )
+    candidates = sorted(
+        [r for r in roster if r["degree"] == degree_filter],
+        key=lambda r: r["name"].casefold(),
+    )
+    pupil = st.selectbox(
+        "Élève",
+        [r["email"] for r in candidates],
+        index=None,
+        format_func=pupil_label,
+        placeholder="Choisir un élève",
+    )
+    if pupil:
+        for row in [a for a in assignments if a["email"] == pupil]:
+            st.write(
+                "P{} · {}".format(
+                    row["period"], activity_details(activity_map[row["activity_id"]])
+                )
+            )
+            if row["source"] in ("teacher", "student") and st.button(
+                "Annuler cette inscription",
+                key="cancel_{}".format(row["id"]),
+                disabled=not can_enroll,
+            ):
+                action("ft2_cancel", {"p_actor": email, "p_assignment": row["id"]})
+        compatible = [
+            a
+            for a in activities
+            if (
+                a["kind"] == "remediation"
+                or session.get("allow_enrichment_enrollment", False)
+            )
+            and a["degree"] == roster_map[pupil]["degree"]
+            and (a["capacity"] is None or counts[a["id"]] < a["capacity"])
+            and (pupil, a["period"]) not in occupied
+            and (pupil, activity_name(a["name"])) not in used
+        ]
+        if not compatible:
+            st.info(
+                "Aucune activité autorisée disponible pour ce degré, différente de celle déjà choisie et à une période libre."
+            )
+        else:
+            chosen = st.selectbox(
+                "Activité",
+                [a["id"] for a in compatible],
+                format_func=activity_label,
+                placeholder="Choisir une activité",
+            )
+            if st.button("Inscrire cet élève", type="primary", disabled=not can_enroll):
+                action(
+                    "ft2_enroll",
+                    {
+                        "p_actor": email,
+                        "p_session": selected,
+                        "p_email": pupil,
+                        "p_activity": chosen,
+                    },
+                )
+with tab_groups:
+    view_degree = st.radio(
+        "Degré",
+        [1, 2, 3],
+        horizontal=True,
+        format_func=lambda d: f"D{d}",
+    )
+    for kind, label in (
+        ("remediation", "Remédiations"),
+        ("depassement", "Dépassements"),
+    ):
+        st.subheader(label)
+        for period in (9, 10):
+            if period == 10:
+                st.markdown("")
+            groups = sorted(
+                [
+                    a
+                    for a in activities
+                    if a["degree"] == view_degree
+                    and a["kind"] == kind
+                    and a["period"] == period
+                ],
+                key=lambda a: (a["period"], a["name"].casefold()),
+            )
+            if not groups:
+                st.caption("Aucune activité pour ce degré à cette période.")
+            for group in groups:
+                members = [a for a in assignments if a["activity_id"] == group["id"]]
+                capacity = (
+                    "sans limite"
+                    if group["capacity"] is None
+                    else str(group["capacity"])
+                )
+                with st.expander(
+                    "P{} · {} · {} / {}".format(
+                        group["period"], activity_details(group), len(members), capacity
+                    )
+                ):
+                    rows = [{"Élève": roster_map[a["email"]]["name"]} for a in members]
+                    if rows:
+                        st.dataframe(
+                            sorted(rows, key=lambda r: r["Élève"].casefold()),
+                            hide_index=True,
+                            width="stretch",
+                        )
+                    else:
+                        st.caption("Aucun élève inscrit.")
 
-        if registration_open:
-            no_registration = True
-            if student_degree >= 1:
-                if len(options_list[f"D{student_degree}"]) > 0:
-                    if not rem_p9:
-                        gen_registration(period=9)
-                    if not rem_p10:
-                        gen_registration(period=10)
-                    no_registration = False
-                if len(options_p910_list[f"D{student_degree}"]) > 0 or (len(options_p910_list["D2_D3"]) and student_degree >= 2):
-                    if not rem_p9 and not rem_p10:
-                        gen_registration(period=910)
-                    no_registration = False
-
-            if no_registration:
-                st.info("Aucune inscription pour toi")
-
+if admin:
+    with tabs[2]:
+        st.caption(
+            "Deux activités différents par élève. Les dépassements à capacité limitée sont remplis en priorité, puis les dépassements sans limite."
+        )
+        if missing:
+            st.dataframe(missing, hide_index=True, width="stretch")
+        else:
+            st.success("Toutes les périodes sont attribuées.")
+        if session["status"] == "open":
+            st.info(
+                "Répartir les élèves attribue les périodes libres et ferme définitivement les inscriptions de cette séance, même avant la date de fin prévue."
+            )
+        if st.button("Répartir les élèves", type="primary"):
+            try:
+                with st.spinner("Préparation des groupes et du fichier Excel…"):
+                    finalize_session(client, selected, email)
+                    current = session_data(client, selected)
+                    final_roster = all_rows(client, "ft2_roster", session_id=selected)
+                    final_activities = all_rows(
+                        client, "ft2_activities", session_id=selected
+                    )
+                    final_assignments = all_rows(
+                        client, "ft2_assignments", session_id=selected
+                    )
+                    data = excel_bytes(
+                        current, final_roster, final_activities, final_assignments
+                    )
+                    st.session_state["excel_{}_{}".format(email, selected)] = data
+                    st.session_state["notice"] = (
+                        "Répartition enregistrée. Le fichier Excel est prêt à télécharger dans l'onglet Répartition et Excel."
+                    )
+                st.rerun()
+            except Exception as exc:
+                st.error(error_message(exc))
+        export_key = "excel_{}_{}".format(email, selected)
+        if session["status"] == "finalized" and export_key in st.session_state:
+            st.download_button(
+                "Télécharger l'Excel",
+                data=st.session_state[export_key],
+                file_name="FocusTime_{}.xlsx".format(session["event_date"]),
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                on_click="ignore",
+            )
