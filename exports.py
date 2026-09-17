@@ -4,6 +4,8 @@ from datetime import date
 
 from io import BytesIO
 import math
+import re
+import unicodedata
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -13,6 +15,35 @@ from openpyxl.worksheet.page import PageMargins
 from activity_import import activity_name
 
 COLORS = ("83CCEB", "F6C6AD", "84E291", "9EDCF3", "E59DDD", "B7E5A5")
+
+YEAR = re.compile(r"\b([1-6])(?:\s*(?:ères?|eres?|ers?|ièmes?|iemes?|èmes?|emes?|es?))?\b", re.IGNORECASE)
+
+
+def course_and_year(name):
+    match = YEAR.search(name)
+    if not match:
+        return name.strip(), "", None
+    year = int(match.group(1))
+    course = (name[:match.start()] + name[match.end():]).strip(" -–—()")
+    return " ".join(course.split()), "1ère" if year == 1 else f"{year}ème", year
+
+
+def group_sort_key(group):
+    course, _, year = course_and_year(group["name"])
+    normalized = "".join(
+        c for c in unicodedata.normalize("NFD", group["name"].casefold())
+        if not unicodedata.combining(c)
+    )
+    category = 0 if group.get("kind", "remediation") == "remediation" else 1
+    if category and re.search(r"\betude\b", normalized):
+        category = 2
+    return category, (year or 99) if category == 0 else 0, course.casefold(), activity_name(group["name"]), group["period"]
+
+
+def surname_first(name):
+    # The roster stores a given name followed by the full family name.
+    parts = name.strip().split(maxsplit=1)
+    return f"{parts[1]} {parts[0]}" if len(parts) == 2 else name.strip()
 
 
 def excel_bytes(session, roster, activities, assignments):
@@ -28,11 +59,12 @@ def excel_bytes(session, roster, activities, assignments):
     )
     for degree in (1, 2, 3):
         ws = wb.create_sheet(f"D{degree}")
-        ws.sheet_view.showGridLines = False
+        ws.sheet_view.showGridLines = True
+        ws.print_options.gridLines = True
         ws.column_dimensions["A"].width = 10.66
         groups = sorted(
             [a for a in activities if a["degree"] == degree],
-            key=lambda a: (activity_name(a["name"]), a["period"]),
+            key=group_sort_key,
         )
         names = list(dict.fromkeys(activity_name(a["name"]) for a in groups))
         if not groups:
@@ -49,7 +81,7 @@ def excel_bytes(session, roster, activities, assignments):
             for name, group in by_name.items():
                 members[name] = sorted(
                     [
-                        roster_map[r["email"]]["name"]
+                        surname_first(roster_map[r["email"]]["name"])
                         for r in assignments
                         if r["activity_id"] == group["id"]
                     ],
@@ -57,20 +89,22 @@ def excel_bytes(session, roster, activities, assignments):
                 )
             row_count = max(12, max((len(v) for v in members.values()), default=0))
             first_row, last_row = header_row + 1, header_row + row_count
-            ws.merge_cells(
-                start_row=first_row, start_column=1, end_row=last_row, end_column=1
-            )
-            label = ws.cell(first_row, 1, f"P{period}")
+            label = ws.cell(header_row, 1, f"P{period}")
             label.font = Font(name="Arial", size=28, bold=True)
             label.alignment = Alignment(horizontal="center", vertical="center")
+            for offset in range(row_count):
+                number = ws.cell(first_row + offset, 1, offset + 1)
+                number.font = Font(name="Arial", size=11)
+                number.alignment = Alignment(horizontal="center", vertical="center")
             header_height = 76
             for column, name in enumerate(names, 2):
                 ws.column_dimensions[get_column_letter(column)].width = 30.66
                 group = by_name.get(name)
                 header = ws.cell(header_row, column)
                 if group:
-                    title = "{}\n({} - Local {})".format(
-                        group["name"], group["professor"], group["room"]
+                    course, year_label, _ = course_and_year(group["name"])
+                    title = "{}\n{}\n{}\nLocal {}".format(
+                        year_label, course, group["professor"], group["room"]
                     )
                     header.value = title
                     header.data_type = "s"
@@ -92,9 +126,6 @@ def excel_bytes(session, roster, activities, assignments):
                     cell = ws.cell(first_row + offset, column)
                     cell.font = Font(name="Arial", size=11)
                     cell.alignment = Alignment(vertical="center", wrap_text=True)
-                    cell.fill = PatternFill(
-                        "solid", fgColor="D9D9D9" if offset % 2 == 0 else "FFFFFF"
-                    )
                     if offset < len(members.get(name, [])):
                         cell.value = members[name][offset]
                         cell.data_type = "s"

@@ -177,7 +177,7 @@ Si la répartition échoue, les inscriptions existantes sont conservées et aucu
 
 Après une répartition réussie, cliquer sur « Télécharger l’Excel » dans le même onglet.
 
-Le classeur comprend trois feuilles : D1, D2 et D3. Les activités sont disposées en colonnes, avec leurs professeurs et locaux ; les élèves sont listés dans des blocs P9 et P10. Le document est préparé pour une impression A3 en paysage.
+Le classeur comprend trois feuilles : D1, D2 et D3. Les activités sont disposées en colonnes avec quatre lignes d’en-tête : cours, année (extraite du nom du cours si présente), professeur et local. Les remédiations sont classées par année croissante, suivies des remédiations sans année, puis des dépassements, avec les groupes contenant le mot « étude » en dernier. Les élèves sont affichés et triés par nom puis prénom, avec une numérotation à gauche. P9 et P10 figurent sur la ligne des titres de chaque bloc. Le quadrillage reste visible, sans alternance de lignes grises. Le document est préparé pour une impression A3 en paysage.
 
 Si le bouton de téléchargement n’apparaît plus après une reconnexion, cliquer à nouveau sur « Répartir les élèves ». Pour une séance déjà finalisée, cela prépare le fichier à partir des groupes enregistrés, sans nouveau tirage ni changement des inscriptions.
 
