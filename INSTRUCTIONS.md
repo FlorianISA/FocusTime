@@ -177,6 +177,10 @@ Si la répartition échoue, les inscriptions existantes sont conservées et aucu
 
 Après une répartition réussie, cliquer sur « Télécharger l’Excel » dans le même onglet.
 
+Pour exporter les inscriptions actuelles sans attribuer les périodes libres, cocher « Ne pas répartir les élèves non inscrits » dans « Répartition et Excel », puis cliquer sur « Générer l'Excel sans répartition ». La colonne « Non inscrits » liste les élèves sans inscription séparément pour P9 et P10, à la fin des activités de chaque degré. Elle apparaît même si elle est vide. Cet export ne modifie aucune inscription et laisse la séance ouverte. Cocher à nouveau la case après une reconnexion pour retrouver ce mode d'export.
+
+Toutes les activités figurent dans l'Excel, même sans élèves. Les colonnes ont une largeur de 27. L'impression ne comporte aucun en-tête ni pied de page.
+
 Le classeur comprend trois feuilles : D1, D2 et D3. Les activités sont disposées en colonnes avec quatre lignes d’en-tête : cours, année (extraite du nom du cours si présente), professeur et local. Les remédiations sont classées par année croissante, suivies des remédiations sans année, puis des dépassements, avec les groupes contenant le mot « étude » en dernier. Les élèves sont affichés et triés par nom puis prénom, avec une numérotation à gauche. P9 et P10 figurent sur la ligne des titres de chaque bloc. Le quadrillage reste visible, sans alternance de lignes grises. Le document est préparé pour une impression A3 en paysage.
 
 Si le bouton de téléchargement n’apparaît plus après une reconnexion, cliquer à nouveau sur « Répartir les élèves ». Pour une séance déjà finalisée, cela prépare le fichier à partir des groupes enregistrés, sans nouveau tirage ni changement des inscriptions.

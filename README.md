@@ -130,7 +130,9 @@ Le script `sql/01_schema.sql` reste un script d’installation initiale : ces ch
 
 Seul le clic administrateur sur « Répartir les élèves » déclenche le traitement. Aucun worker, aucune tâche programmée et aucun calcul au simple affichage de la page.
 
-Le calcul conserve toutes les inscriptions existantes, y compris les dépassements choisis manuellement, et attribue les périodes libres aux dépassements :
+La case « Ne pas répartir les élèves non inscrits » permet de générer l'Excel à partir des inscriptions actuelles, sans répartition automatique. Le bouton devient « Générer l'Excel sans répartition ». Pour chaque période (P9 et P10), les élèves sans inscription figurent dans une colonne « Non inscrits » à la fin des activités de leur degré. Cette colonne apparaît même si elle est vide. La séance reste ouverte : aucune inscription ni donnée en base n'est modifiée par cet export. Après une reconnexion, cocher à nouveau l'option pour refaire cet export.
+
+Lorsque la case est décochée, le calcul conserve toutes les inscriptions existantes, y compris les dépassements choisis manuellement, et attribue les périodes libres aux dépassements :
 
 - le degré doit correspondre ;
 - chaque élève a une activité en P9 et une en P10 ;
@@ -145,7 +147,7 @@ Si aucune répartition complète n’est possible, aucun ajout automatique n’e
 
 La base vérifie les rôles, les places, les noms, les périodes et la révision de la séance. Si une inscription ou une activité change pendant le calcul, le plan est refusé : relancer la génération.
 
-Le clic peut intervenir avant ou après la fin prévue des inscriptions. S’il réussit, la séance est finalisée et les inscriptions sont fermées. Le bouton « Télécharger l’Excel » apparaît ensuite. Le classeur contient trois feuilles D1, D2 et D3 dans la disposition du modèle « Focus Time 06-01-26.xlsx » : activités en colonnes, en-têtes colorés sur quatre lignes (cours, année extraite du nom si présente, professeur, local), élèves listés en dessous sans alternance grise, quadrillage visible à l’écran et à l’impression. P9 et P10 figurent à gauche sur la ligne des titres ; les numéros de lignes des élèves commencent à 1 sous chaque titre. Une même activité garde sa colonne et sa couleur entre les périodes. Si elle n’est proposée qu’à une période, l’autre bloc l’indique.
+Le clic sur « Répartir les élèves » peut intervenir avant ou après la fin prévue des inscriptions. S’il réussit, la séance est finalisée et les inscriptions sont fermées. Le bouton « Télécharger l’Excel » apparaît ensuite. Le classeur contient trois feuilles D1, D2 et D3 dans la disposition du modèle « Focus Time 06-01-26.xlsx » : toutes les activités en colonnes, même sans élèves, en-têtes colorés sur quatre lignes (cours, année extraite du nom si présente, professeur, local), élèves listés en dessous sans alternance grise, quadrillage visible à l’écran et à l’impression. P9 et P10 figurent à gauche sur la ligne des titres ; les numéros de lignes des élèves commencent à 1 sous chaque titre. Une même activité garde sa colonne et sa couleur entre les périodes. Si elle n’est proposée qu’à une période, l’autre bloc l’indique.
 
 Chaque bloc prévoit au moins 12 lignes et s’étend au nombre réel d’élèves : aucun groupe illimité n’est tronqué. Les élèves sont affichés et triés sous la forme nom-prénom (le premier mot du champ enregistré est traité comme le prénom, le reste comme le nom de famille). Les remédiations sont classées par année croissante, puis viennent celles sans année, les dépassements et enfin les dépassements contenant le mot « étude ». Une feuille sans activité porte une mention explicite. Les colonnes des activités ont une largeur de 27. L’impression est configurée en A3 paysage, adaptée à la largeur, sans en-tête ni pied de page. Il n’y a plus de feuille Planning tabulaire.
 

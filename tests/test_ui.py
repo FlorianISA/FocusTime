@@ -98,7 +98,8 @@ class Query:
 
 class UiTests(unittest.TestCase):
     def render(
-        self, info, generate=False, empty=False, students=False, enrichment=False
+        self, info, generate=False, empty=False, students=False, enrichment=False,
+        skip_unregistered=False, regenerate=False,
     ):
         st.cache_resource.clear()
         data = copy.deepcopy(DATA)
@@ -113,6 +114,8 @@ class UiTests(unittest.TestCase):
 
         def finalize(_client, sid, actor):
             self.assertEqual(actor, "admin@test")
+            if data["ft2_sessions"][0]["status"] == "finalized":
+                return
             data["ft2_sessions"][0]["status"] = "finalized"
             data["ft2_assignments"].append(
                 {
@@ -136,12 +139,40 @@ class UiTests(unittest.TestCase):
             self.assertEqual(list(at.exception), [])
             finalizer.assert_not_called()
             if generate:
-                next(
-                    b for b in at.button if b.label == "Répartir les élèves"
-                ).click().run(timeout=10)
+                if skip_unregistered:
+                    next(
+                        field for field in at.checkbox
+                        if field.label == "Ne pas répartir les élèves non inscrits"
+                    ).check().run(timeout=10)
+                label = "Générer l'Excel sans répartition" if skip_unregistered else "Répartir les élèves"
+                next(b for b in at.button if b.label == label).click().run(timeout=10)
                 self.assertEqual(list(at.exception), [])
-                finalizer.assert_called_once()
+                if skip_unregistered:
+                    finalizer.assert_not_called()
+                    self.assertEqual(data["ft2_sessions"][0]["status"], "open")
+                    self.assertEqual(data["ft2_assignments"], [] if empty else DATA["ft2_assignments"])
+                else:
+                    finalizer.assert_called_once_with(client, 1, "admin@test")
                 self.assertIn("excel_admin@test_1", at.session_state)
+                self.assertEqual(len(at.get("download_button")), 1)
+                if regenerate:
+                    next(b for b in at.button if b.label == label).click().run(timeout=10)
+                    self.assertEqual(list(at.exception), [])
+                    if skip_unregistered:
+                        finalizer.assert_not_called()
+                        self.assertEqual(data["ft2_assignments"], [] if empty else DATA["ft2_assignments"])
+                    self.assertEqual(len(at.get("download_button")), 1)
+                if skip_unregistered:
+                    next(
+                        field for field in at.checkbox
+                        if field.label == "Ne pas répartir les élèves non inscrits"
+                    ).uncheck().run(timeout=10)
+                    self.assertEqual(len(at.get("download_button")), 0)
+                    next(
+                        field for field in at.checkbox
+                        if field.label == "Ne pas répartir les élèves non inscrits"
+                    ).check().run(timeout=10)
+                    self.assertEqual(len(at.get("download_button")), 1)
             return at
 
     def test_logged_out(self):
@@ -164,6 +195,29 @@ class UiTests(unittest.TestCase):
 
     def test_admin_click_generates_excel(self):
         self.render({"is_logged_in": True, "email": "admin@test"}, generate=True)
+
+    def test_admin_skip_unregistered_generates_and_regenerates_excel(self):
+        from io import BytesIO
+        from openpyxl import load_workbook
+        at = self.render(
+            {"is_logged_in": True, "email": "admin@test"},
+            generate=True, skip_unregistered=True, regenerate=True,
+        )
+        option = next(
+            field for field in at.checkbox
+            if field.label == "Ne pas répartir les élèves non inscrits"
+        )
+        self.assertTrue(option.value)
+        self.assertFalse(option.disabled)
+        wb = load_workbook(BytesIO(at.session_state["excel_admin@test_1"]))
+        self.assertEqual(wb["D2"]["D19"].value, "Non inscrits")
+        self.assertEqual(wb["D2"]["D20"].value, "Élève")
+        self.assertIsNone(wb["D2"]["C20"].value)
+        # A session with no activities can also export with this option.
+        self.render(
+            {"is_logged_in": True, "email": "admin@test"},
+            generate=True, empty=True, skip_unregistered=True,
+        )
 
     def test_unknown_denied(self):
         at = self.render({"is_logged_in": True, "email": "unknown@test"})
@@ -189,6 +243,7 @@ class UiTests(unittest.TestCase):
                 "Autoriser les élèves à s’inscrire eux-mêmes".replace("’", "'"),
                 "Autoriser les inscriptions aux dépassements",
                 "Sans limite de places",
+                "Ne pas répartir les élèves non inscrits",
             ],
         )
         self.assertEqual(

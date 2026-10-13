@@ -46,11 +46,12 @@ def surname_first(name):
     return f"{parts[1]} {parts[0]}" if len(parts) == 2 else name.strip()
 
 
-def excel_bytes(session, roster, activities, assignments):
-    activity_map = {a["id"]: a for a in activities}
+def excel_bytes(session, roster, activities, assignments, skip_unregistered=False):
     roster_map = {s["email"]: s for s in roster}
     assigned = {(a["email"], a["period"]) for a in assignments}
-    if any((s["email"], p) not in assigned for s in roster for p in (9, 10)):
+    if not skip_unregistered and any(
+        (s["email"], p) not in assigned for s in roster for p in (9, 10)
+    ):
         raise ValueError("Le planning est incomplet : génération de l'Excel refusée.")
     wb = Workbook()
     wb.remove(wb.active)
@@ -67,13 +68,15 @@ def excel_bytes(session, roster, activities, assignments):
             key=group_sort_key,
         )
         names = list(dict.fromkeys(activity_name(a["name"]) for a in groups))
-        if not groups:
+        # None identifies the special column, even if an activity has that name.
+        columns = names + ([None] if skip_unregistered else [])
+        if not columns:
             ws["A1"] = f"D{degree} — Aucune activité"
             ws["A1"].font = Font(name="Arial", size=11)
             ws.merge_cells("A1:D1")
             ws.print_area = "A1:D1"
         header_row = 1
-        for period in (9, 10) if groups else ():
+        for period in (9, 10) if columns else ():
             members = {}
             by_name = {
                 activity_name(a["name"]): a for a in groups if a["period"] == period
@@ -87,6 +90,16 @@ def excel_bytes(session, roster, activities, assignments):
                     ],
                     key=str.casefold,
                 )
+            if skip_unregistered:
+                members[None] = sorted(
+                    [
+                        surname_first(pupil["name"])
+                        for pupil in roster
+                        if pupil["degree"] == degree
+                        and (pupil["email"], period) not in assigned
+                    ],
+                    key=str.casefold,
+                )
             row_count = max(12, max((len(v) for v in members.values()), default=0))
             first_row, last_row = header_row + 1, header_row + row_count
             label = ws.cell(header_row, 1, f"P{period}")
@@ -97,11 +110,14 @@ def excel_bytes(session, roster, activities, assignments):
                 number.font = Font(name="Arial", size=11)
                 number.alignment = Alignment(horizontal="center", vertical="center")
             header_height = 76
-            for column, name in enumerate(names, 2):
+            for column, name in enumerate(columns, 2):
                 ws.column_dimensions[get_column_letter(column)].width = 27
                 group = by_name.get(name)
                 header = ws.cell(header_row, column)
-                if group:
+                if name is None:
+                    header.value = "Non inscrits"
+                    header.fill = PatternFill("solid", fgColor="ECECEC")
+                elif group:
                     course, year_label, _ = course_and_year(group["name"])
                     title = "{}\n{}\n{}\nLocal {}".format(
                         year_label, course, group["professor"], group["room"]
@@ -135,7 +151,7 @@ def excel_bytes(session, roster, activities, assignments):
             for row in range(first_row, last_row + 1):
                 values = [
                     str(ws.cell(row, col).value or "")
-                    for col in range(2, len(names) + 2)
+                    for col in range(2, len(columns) + 2)
                 ]
                 lines = max(
                     (max(1, math.ceil(len(value) / 32)) for value in values), default=1
@@ -143,7 +159,7 @@ def excel_bytes(session, roster, activities, assignments):
                 ws.row_dimensions[row].height = max(24.9, lines * 14 + 6)
             header_row = last_row + 6
             ws.print_area = "A1:{}{}".format(
-                get_column_letter(len(names) + 1), last_row
+                get_column_letter(len(columns) + 1), last_row
             )
         ws.page_setup.orientation = "landscape"
         ws.page_setup.paperSize = ws.PAPERSIZE_A3

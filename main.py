@@ -612,21 +612,39 @@ with tab_groups:
 
 if admin:
     with tabs[2]:
-        st.caption(
-            "Deux activités différents par élève. Les dépassements à capacité limitée sont remplis en priorité, puis les dépassements sans limite."
+        skip_unregistered = st.checkbox(
+            "Ne pas répartir les élèves non inscrits",
+            key=f"skip_unregistered_{selected}",
+            help="Pour chaque période (P9 et P10), les élèves sans inscription figurent dans la colonne Non inscrits de l'Excel. La génération conserve les inscriptions actuelles et laisse la séance ouverte.",
         )
+        if skip_unregistered:
+            st.caption(
+                "Les inscriptions sont conservées. Les périodes libres apparaissent dans la colonne Non inscrits, sans affectation automatique."
+            )
+        else:
+            st.caption(
+                "Deux activités différentes par élève. Les dépassements à capacité limitée sont remplis en priorité, puis les dépassements sans limite."
+            )
         if missing:
             st.dataframe(missing, hide_index=True, width="stretch")
         else:
             st.success("Toutes les périodes sont attribuées.")
         if session["status"] == "open":
             st.info(
+                "Générer l'Excel sans répartition conserve les inscriptions actuelles et laisse la séance ouverte."
+                if skip_unregistered else
                 "Répartir les élèves attribue les périodes libres et ferme définitivement les inscriptions de cette séance, même avant la date de fin prévue."
             )
-        if st.button("Répartir les élèves", type="primary"):
+        export_key = "excel_{}_{}".format(email, selected)
+        export_mode_key = "excel_mode_{}_{}".format(email, selected)
+        if st.button(
+            "Générer l'Excel sans répartition" if skip_unregistered else "Répartir les élèves",
+            type="primary",
+        ):
             try:
                 with st.spinner("Préparation des groupes et du fichier Excel…"):
-                    finalize_session(client, selected, email)
+                    if not skip_unregistered:
+                        finalize_session(client, selected, email)
                     current = session_data(client, selected)
                     final_roster = all_rows(client, "ft2_roster", session_id=selected)
                     final_activities = all_rows(
@@ -636,17 +654,21 @@ if admin:
                         client, "ft2_assignments", session_id=selected
                     )
                     data = excel_bytes(
-                        current, final_roster, final_activities, final_assignments
+                        current, final_roster, final_activities, final_assignments,
+                        skip_unregistered=skip_unregistered,
                     )
-                    st.session_state["excel_{}_{}".format(email, selected)] = data
+                    st.session_state[export_key] = data
+                    st.session_state[export_mode_key] = skip_unregistered
                     st.session_state["notice"] = (
-                        "Répartition enregistrée. Le fichier Excel est prêt à télécharger dans l'onglet Répartition et Excel."
+                        "Le fichier Excel est prêt à télécharger dans l'onglet Répartition et Excel."
                     )
                 st.rerun()
             except Exception as exc:
                 st.error(error_message(exc))
-        export_key = "excel_{}_{}".format(email, selected)
-        if session["status"] == "finalized" and export_key in st.session_state:
+        if (
+            export_key in st.session_state
+            and st.session_state.get(export_mode_key, False) == skip_unregistered
+        ):
             st.download_button(
                 "Télécharger l'Excel",
                 data=st.session_state[export_key],
