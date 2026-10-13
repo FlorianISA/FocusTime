@@ -98,7 +98,7 @@ def excel_bytes(session, roster, activities, assignments):
                 number.alignment = Alignment(horizontal="center", vertical="center")
             header_height = 76
             for column, name in enumerate(names, 2):
-                ws.column_dimensions[get_column_letter(column)].width = 30.66
+                ws.column_dimensions[get_column_letter(column)].width = 27
                 group = by_name.get(name)
                 header = ws.cell(header_row, column)
                 if group:
@@ -152,12 +152,6 @@ def excel_bytes(session, roster, activities, assignments):
         ws.sheet_properties.pageSetUpPr.fitToPage = True
         ws.page_margins = PageMargins(left=0.25, right=0.25, top=0.5, bottom=0.5)
         ws.print_options.horizontalCentered = True
-        ws.oddHeader.center.text = "{} — {} — D{}".format(
-            session["title"],
-            date.fromisoformat(session["event_date"]).strftime("%d/%m/%Y"),
-            degree,
-        )
-        ws.oddFooter.right.text = "Page &P / &N"
     output = BytesIO()
     wb.save(output)
     return output.getvalue()
