@@ -615,11 +615,10 @@ if admin:
         skip_unregistered = st.checkbox(
             "Ne pas répartir les élèves non inscrits",
             key=f"skip_unregistered_{selected}",
-            help="Pour chaque période (P9 et P10), les élèves sans inscription figurent dans la colonne Non inscrits de l'Excel. La génération conserve les inscriptions actuelles et laisse la séance ouverte.",
         )
         if skip_unregistered:
             st.caption(
-                "Les inscriptions sont conservées. Les périodes libres apparaissent dans la colonne Non inscrits, sans affectation automatique."
+                "Les inscriptions aux remédiations sont conservées. Les périodes libres apparaissent dans la colonne Non inscrits."
             )
         else:
             st.caption(
@@ -638,7 +637,7 @@ if admin:
         export_key = "excel_{}_{}".format(email, selected)
         export_mode_key = "excel_mode_{}_{}".format(email, selected)
         if st.button(
-            "Générer l'Excel sans répartition" if skip_unregistered else "Répartir les élèves",
+            "Générer l'Excel sans répartition" if skip_unregistered else "Répartir les élèves et générer l'Excel",
             type="primary",
         ):
             try:
