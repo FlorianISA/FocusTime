@@ -614,7 +614,7 @@ if admin:
     with tabs[2]:
         st.write("Ne pas répartir les élèves non inscrits :")
         skip_degrees = []
-        for degree, column in zip((1, 2, 3), st.columns(3)):
+        for degree, column in zip((1, 2, 3), st.columns(3, width=200)):
             if column.checkbox(
                 f"D{degree}", key=f"skip_unregistered_{selected}_{degree}"
             ):
