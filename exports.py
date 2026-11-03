@@ -46,11 +46,14 @@ def surname_first(name):
     return f"{parts[1]} {parts[0]}" if len(parts) == 2 else name.strip()
 
 
-def excel_bytes(session, roster, activities, assignments, skip_unregistered=False):
+def excel_bytes(session, roster, activities, assignments, skip_degrees=()):
+    skip_degrees = set(skip_degrees)
     roster_map = {s["email"]: s for s in roster}
     assigned = {(a["email"], a["period"]) for a in assignments}
-    if not skip_unregistered and any(
-        (s["email"], p) not in assigned for s in roster for p in (9, 10)
+    if any(
+        (s["email"], p) not in assigned
+        for s in roster if s["degree"] not in skip_degrees
+        for p in (9, 10)
     ):
         raise ValueError("Le planning est incomplet : génération de l'Excel refusée.")
     wb = Workbook()
@@ -59,6 +62,7 @@ def excel_bytes(session, roster, activities, assignments, skip_unregistered=Fals
         session["title"], date.fromisoformat(session["event_date"]).strftime("%d/%m/%Y")
     )
     for degree in (1, 2, 3):
+        skip_unregistered = degree in skip_degrees
         ws = wb.create_sheet(f"D{degree}")
         ws.sheet_view.showGridLines = True
         ws.print_options.gridLines = True

@@ -77,7 +77,7 @@ class ExportTests(unittest.TestCase):
         assignments = [{"email": "a", "period": 9, "activity_id": 1}]
         wb = load_workbook(BytesIO(excel_bytes(
             {"title": "Test", "event_date": "2026-09-15"},
-            roster, groups, assignments, skip_unregistered=True,
+            roster, groups, assignments, skip_degrees=(1, 2, 3),
         )))
         ws = wb["D2"]
         self.assertEqual(ws["B2"].value, "Zed Alice")
@@ -108,7 +108,7 @@ class ExportTests(unittest.TestCase):
             with self.subTest(enabled=enabled):
                 wb = load_workbook(BytesIO(excel_bytes(
                     {"title": "Test", "event_date": "2026-09-15"},
-                    [], groups, [], skip_unregistered=enabled,
+                    [], groups, [], skip_degrees=(1, 2, 3) if enabled else (),
                 )))
                 ws = wb["D2"]
                 self.assertEqual(ws["B1"].value, "\nVide\nProf\nLocal A")
@@ -126,7 +126,7 @@ class ExportTests(unittest.TestCase):
         ] + [{"email": "formula", "name": "=1+1", "degree": 1}]
         wb = load_workbook(BytesIO(excel_bytes(
             {"title": "Test", "event_date": "2026-09-15"},
-            roster, [], [], skip_unregistered=True,
+            roster, [], [], skip_degrees=(1, 2, 3),
         )))
         ws = wb["D1"]
         self.assertEqual(ws["B1"].value, "Non inscrits")
@@ -142,7 +142,7 @@ class ExportTests(unittest.TestCase):
         wb = load_workbook(BytesIO(excel_bytes(
             {"title": "Test", "event_date": "2026-09-15"},
             [{"email": "a", "name": "Alice Dupont", "degree": 1}], [group],
-            [{"email": "a", "period": 9, "activity_id": 1}], skip_unregistered=True,
+            [{"email": "a", "period": 9, "activity_id": 1}], skip_degrees=(1, 2, 3),
         )))
         self.assertEqual(wb["D1"]["B2"].value, "Dupont Alice")
         self.assertEqual(wb["D1"]["C1"].value, "Non inscrits")
@@ -183,6 +183,39 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(wb["D1"]["A37"].value, "P10")
         self.assertEqual(wb["D1"]["C67"].value, "29 Élève")
         self.assertEqual(wb["D1"]["A67"].value, 30)
+
+    def test_non_inscrits_only_in_excluded_degree(self):
+        roster = [dict(email=f"d{d}", name=f"Eleve Degre{d}", degree=d) for d in (1, 2, 3)]
+        groups = [
+            dict(id=d * 10 + p, degree=d, period=p, name="Choix A" if p == 9 else "Choix B", professor="Prof", room="A")
+            for d in (1, 2, 3) for p in (9, 10)
+        ]
+        assignments = [
+            dict(email=f"d{d}", period=p, activity_id=d * 10 + p)
+            for d in (1, 2) for p in (9, 10)
+        ] + [dict(email="d3", period=9, activity_id=39)]
+        wb = load_workbook(BytesIO(excel_bytes(
+            {"title": "Test", "event_date": "2026-09-15"},
+            roster, groups, assignments, skip_degrees=(3,),
+        )))
+        for degree in (1, 2):
+            ws = wb[f"D{degree}"]
+            self.assertEqual(ws.max_column, 3)
+            self.assertEqual(ws["B2"].value, f"Degre{degree} Eleve")
+            self.assertEqual(ws["C20"].value, f"Degre{degree} Eleve")
+            self.assertNotIn("Non inscrits", [cell.value for cell in ws[1]])
+        ws = wb["D3"]
+        self.assertEqual(ws.max_column, 4)
+        self.assertEqual(ws["D1"].value, "Non inscrits")
+        self.assertIsNone(ws["D2"].value)
+        self.assertEqual(ws["D20"].value, "Degre3 Eleve")
+        self.assertIsNone(ws["C20"].value)
+        # Excluding D3 must not allow an incomplete D1 or D2 export.
+        with self.assertRaisesRegex(ValueError, "incomplet"):
+            excel_bytes(
+                {"title": "Test", "event_date": "2026-09-15"},
+                roster, groups, assignments[1:], skip_degrees=(3,),
+            )
 
     def test_year_extraction_and_group_order(self):
         for name, expected in (

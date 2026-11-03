@@ -99,7 +99,7 @@ class Query:
 class UiTests(unittest.TestCase):
     def render(
         self, info, generate=False, empty=False, students=False, enrichment=False,
-        skip_unregistered=False, regenerate=False,
+        skip_degrees=(), regenerate=False, extra_degrees=False,
     ):
         st.cache_resource.clear()
         data = copy.deepcopy(DATA)
@@ -110,24 +110,37 @@ class UiTests(unittest.TestCase):
         if empty:
             data["ft2_activities"] = []
             data["ft2_assignments"] = []
+        if extra_degrees:
+            data["ft2_roster"].extend([
+                dict(session_id=1, email=f"d{d}@test", name=f"Eleve Degre{d}", degree=d)
+                for d in (1, 3)
+            ])
+            data["ft2_activities"].extend([
+                dict(id=d * 10 + p, session_id=1, name="Choix A" if p == 9 else "Choix B", professor="Prof", room="A",
+                     period=p, kind="depassement", degree=d, capacity=12)
+                for d in (1, 3) for p in (9, 10)
+            ])
         client = SimpleNamespace(table=lambda table: Query(table, data))
 
-        def finalize(_client, sid, actor):
+        def finalize(_client, sid, actor, skip_degrees=()):
             self.assertEqual(actor, "admin@test")
             if data["ft2_sessions"][0]["status"] == "finalized":
                 return
-            data["ft2_sessions"][0]["status"] = "finalized"
-            data["ft2_assignments"].append(
-                {
-                    "id": 2,
-                    "session_id": 1,
-                    "email": "student@test",
-                    "activity_id": 2,
-                    "period": 10,
-                    "created_by": actor,
-                    "source": "automatic",
-                }
-            )
+            if not skip_degrees:
+                data["ft2_sessions"][0]["status"] = "finalized"
+            occupied = {(a["email"], a["period"]) for a in data["ft2_assignments"]}
+            for pupil in data["ft2_roster"]:
+                if pupil["degree"] in skip_degrees:
+                    continue
+                for period in (9, 10):
+                    if (pupil["email"], period) in occupied:
+                        continue
+                    group = next(a for a in data["ft2_activities"]
+                                 if a["degree"] == pupil["degree"] and a["period"] == period)
+                    data["ft2_assignments"].append(dict(
+                        id=len(data["ft2_assignments"]) + 1, session_id=1, email=pupil["email"],
+                        activity_id=group["id"], period=period, created_by=actor, source="automatic",
+                    ))
 
         with patch("streamlit.user_info._get_user_info", return_value=info), patch(
             "supabase.create_client", return_value=client
@@ -139,38 +152,39 @@ class UiTests(unittest.TestCase):
             self.assertEqual(list(at.exception), [])
             finalizer.assert_not_called()
             if generate:
-                if skip_unregistered:
+                for degree in skip_degrees:
                     next(
                         field for field in at.checkbox
-                        if field.label == "Ne pas répartir les élèves non inscrits"
+                        if field.label == f"D{degree}"
                     ).check().run(timeout=10)
-                label = "Générer l'Excel sans répartition" if skip_unregistered else "Répartir les élèves"
+                label = "Générer l'Excel sans répartition" if len(skip_degrees) == 3 else "Répartir les élèves et générer l'Excel"
                 next(b for b in at.button if b.label == label).click().run(timeout=10)
                 self.assertEqual(list(at.exception), [])
-                if skip_unregistered:
+                if len(skip_degrees) == 3:
                     finalizer.assert_not_called()
                     self.assertEqual(data["ft2_sessions"][0]["status"], "open")
                     self.assertEqual(data["ft2_assignments"], [] if empty else DATA["ft2_assignments"])
                 else:
-                    finalizer.assert_called_once_with(client, 1, "admin@test")
+                    finalizer.assert_called_once_with(client, 1, "admin@test", skip_degrees=skip_degrees)
+                    self.assertEqual(data["ft2_sessions"][0]["status"], "open" if skip_degrees else "finalized")
                 self.assertIn("excel_admin@test_1", at.session_state)
                 self.assertEqual(len(at.get("download_button")), 1)
                 if regenerate:
                     next(b for b in at.button if b.label == label).click().run(timeout=10)
                     self.assertEqual(list(at.exception), [])
-                    if skip_unregistered:
+                    if len(skip_degrees) == 3:
                         finalizer.assert_not_called()
                         self.assertEqual(data["ft2_assignments"], [] if empty else DATA["ft2_assignments"])
                     self.assertEqual(len(at.get("download_button")), 1)
-                if skip_unregistered:
+                if skip_degrees:
                     next(
                         field for field in at.checkbox
-                        if field.label == "Ne pas répartir les élèves non inscrits"
+                        if field.label == f"D{skip_degrees[0]}"
                     ).uncheck().run(timeout=10)
                     self.assertEqual(len(at.get("download_button")), 0)
                     next(
                         field for field in at.checkbox
-                        if field.label == "Ne pas répartir les élèves non inscrits"
+                        if field.label == f"D{skip_degrees[0]}"
                     ).check().run(timeout=10)
                     self.assertEqual(len(at.get("download_button")), 1)
             return at
@@ -185,13 +199,13 @@ class UiTests(unittest.TestCase):
 
     def test_teacher_cannot_generate(self):
         at = self.render({"is_logged_in": True, "email": "prof@test"})
-        self.assertNotIn("Répartir les élèves", [b.label for b in at.button])
+        self.assertNotIn("Répartir les élèves et générer l'Excel", [b.label for b in at.button])
         self.assertNotIn("Répartition et Excel", [tab.label for tab in at.tabs])
         self.assertNotIn("Actualiser", [b.label for b in at.button])
 
     def test_admin_render_does_not_allocate_even_after_deadline(self):
         at = self.render({"is_logged_in": True, "email": "admin@test"})
-        self.assertIn("Répartir les élèves", [b.label for b in at.button])
+        self.assertIn("Répartir les élèves et générer l'Excel", [b.label for b in at.button])
 
     def test_admin_click_generates_excel(self):
         self.render({"is_logged_in": True, "email": "admin@test"}, generate=True)
@@ -201,11 +215,11 @@ class UiTests(unittest.TestCase):
         from openpyxl import load_workbook
         at = self.render(
             {"is_logged_in": True, "email": "admin@test"},
-            generate=True, skip_unregistered=True, regenerate=True,
+            generate=True, skip_degrees=(1, 2, 3), regenerate=True,
         )
         option = next(
             field for field in at.checkbox
-            if field.label == "Ne pas répartir les élèves non inscrits"
+            if field.label == "D2"
         )
         self.assertTrue(option.value)
         self.assertFalse(option.disabled)
@@ -216,8 +230,28 @@ class UiTests(unittest.TestCase):
         # A session with no activities can also export with this option.
         self.render(
             {"is_logged_in": True, "email": "admin@test"},
-            generate=True, empty=True, skip_unregistered=True,
+            generate=True, empty=True, skip_degrees=(1, 2, 3),
         )
+
+    def test_admin_distributes_d1_d2_but_not_d3(self):
+        from io import BytesIO
+        from openpyxl import load_workbook
+        at = self.render(
+            {"is_logged_in": True, "email": "admin@test"}, generate=True,
+            skip_degrees=(3,), extra_degrees=True, regenerate=True,
+        )
+        self.assertFalse(next(field for field in at.checkbox if field.label == "D1").value)
+        self.assertFalse(next(field for field in at.checkbox if field.label == "D2").value)
+        self.assertTrue(next(field for field in at.checkbox if field.label == "D3").value)
+        wb = load_workbook(BytesIO(at.session_state["excel_admin@test_1"]))
+        self.assertEqual(wb["D1"]["B2"].value, "Degre1 Eleve")
+        self.assertEqual(wb["D1"]["C20"].value, "Degre1 Eleve")
+        self.assertEqual(wb["D2"]["C20"].value, "Élève")
+        for degree in (1, 2):
+            self.assertNotIn("Non inscrits", [cell.value for cell in wb[f"D{degree}"][1]])
+        self.assertEqual(wb["D3"]["D2"].value, "Degre3 Eleve")
+        self.assertEqual(wb["D3"]["D20"].value, "Degre3 Eleve")
+        self.assertIsNone(wb["D3"]["B2"].value)
 
     def test_unknown_denied(self):
         at = self.render({"is_logged_in": True, "email": "unknown@test"})
@@ -243,7 +277,7 @@ class UiTests(unittest.TestCase):
                 "Autoriser les élèves à s’inscrire eux-mêmes".replace("’", "'"),
                 "Autoriser les inscriptions aux dépassements",
                 "Sans limite de places",
-                "Ne pas répartir les élèves non inscrits",
+                "D1", "D2", "D3",
             ],
         )
         self.assertEqual(

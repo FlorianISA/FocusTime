@@ -177,7 +177,9 @@ Si la répartition échoue, les inscriptions existantes sont conservées et aucu
 
 Après une répartition réussie, cliquer sur « Télécharger l’Excel » dans le même onglet.
 
-Pour exporter les inscriptions actuelles sans attribuer les périodes libres, cocher « Ne pas répartir les élèves non inscrits » dans « Répartition et Excel », puis cliquer sur « Générer l'Excel sans répartition ». La colonne « Non inscrits » liste les élèves sans inscription séparément pour P9 et P10, à la fin des activités de chaque degré. Elle apparaît même si elle est vide. Cet export ne modifie aucune inscription et laisse la séance ouverte. Cocher à nouveau la case après une reconnexion pour retrouver ce mode d'export.
+Dans « Répartition et Excel », cocher les degrés à exclure sous « Ne pas répartir les élèves non inscrits ». Pour répartir D1 et D2 mais pas D3, cocher uniquement D3, puis cliquer sur « Répartir les élèves et générer l'Excel ». Les affectations de D1 et D2 sont enregistrées ; les périodes libres de D3 figurent dans sa colonne « Non inscrits », séparément en P9 et P10. Cette colonne apparaît même si elle est vide, uniquement pour les degrés cochés. Les inscriptions existantes de tous les degrés sont conservées et la séance reste ouverte.
+
+Cocher les trois degrés permet de « Générer l'Excel sans répartition », sans modifier aucune inscription. Décocher les trois degrés permet de répartir tout le monde et de finaliser la séance. Après une reconnexion, cocher à nouveau les degrés à exclure. Une nouvelle génération conserve les affectations déjà enregistrées, même si leur degré est ensuite coché.
 
 Toutes les activités figurent dans l'Excel, même sans élèves. Les colonnes ont une largeur de 27. L'impression ne comporte aucun en-tête ni pied de page.
 

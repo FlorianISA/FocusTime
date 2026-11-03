@@ -612,14 +612,22 @@ with tab_groups:
 
 if admin:
     with tabs[2]:
-        skip_unregistered = st.checkbox(
-            "Ne pas répartir les élèves non inscrits",
-            key=f"skip_unregistered_{selected}",
-        )
-        if skip_unregistered:
-            st.caption(
-                "Les inscriptions aux remédiations sont conservées. Les périodes libres apparaissent dans la colonne Non inscrits."
+        st.write("Ne pas répartir les élèves non inscrits :")
+        skip_degrees = []
+        for degree, column in zip((1, 2, 3), st.columns(3)):
+            if column.checkbox(
+                f"D{degree}", key=f"skip_unregistered_{selected}_{degree}"
+            ):
+                skip_degrees.append(degree)
+        skip_degrees = tuple(skip_degrees)
+        if skip_degrees:
+            excluded_labels = ", ".join(f"D{degree}" for degree in skip_degrees)
+            included_labels = ", ".join(
+                f"D{degree}" for degree in (1, 2, 3) if degree not in skip_degrees
             )
+            st.caption(f"Colonne Non inscrits pour : {excluded_labels}. Les inscriptions existantes sont conservées.")
+            if included_labels:
+                st.caption(f"Répartition automatique pour : {included_labels}.")
         else:
             st.caption(
                 "Deux activités différentes par élève. Les dépassements à capacité limitée sont remplis en priorité, puis les dépassements sans limite."
@@ -630,20 +638,20 @@ if admin:
             st.success("Toutes les périodes sont attribuées.")
         if session["status"] == "open":
             st.info(
-                "Générer l'Excel sans répartition conserve les inscriptions actuelles et laisse la séance ouverte."
-                if skip_unregistered else
+                "Les degrés cochés ne sont pas répartis. La séance reste ouverte ; les affectations des autres degrés sont enregistrées."
+                if skip_degrees else
                 "Répartir les élèves attribue les périodes libres et ferme définitivement les inscriptions de cette séance, même avant la date de fin prévue."
             )
         export_key = "excel_{}_{}".format(email, selected)
         export_mode_key = "excel_mode_{}_{}".format(email, selected)
         if st.button(
-            "Générer l'Excel sans répartition" if skip_unregistered else "Répartir les élèves et générer l'Excel",
+            "Générer l'Excel sans répartition" if len(skip_degrees) == 3 else "Répartir les élèves et générer l'Excel",
             type="primary",
         ):
             try:
                 with st.spinner("Préparation des groupes et du fichier Excel…"):
-                    if not skip_unregistered:
-                        finalize_session(client, selected, email)
+                    if len(skip_degrees) != 3:
+                        finalize_session(client, selected, email, skip_degrees=skip_degrees)
                     current = session_data(client, selected)
                     final_roster = all_rows(client, "ft2_roster", session_id=selected)
                     final_activities = all_rows(
@@ -654,10 +662,10 @@ if admin:
                     )
                     data = excel_bytes(
                         current, final_roster, final_activities, final_assignments,
-                        skip_unregistered=skip_unregistered,
+                        skip_degrees=skip_degrees,
                     )
                     st.session_state[export_key] = data
-                    st.session_state[export_mode_key] = skip_unregistered
+                    st.session_state[export_mode_key] = skip_degrees
                     st.session_state["notice"] = (
                         "Le fichier Excel est prêt à télécharger dans l'onglet Répartition et Excel."
                     )
@@ -666,7 +674,7 @@ if admin:
                 st.error(error_message(exc))
         if (
             export_key in st.session_state
-            and st.session_state.get(export_mode_key, False) == skip_unregistered
+            and st.session_state.get(export_mode_key) == skip_degrees
         ):
             st.download_button(
                 "Télécharger l'Excel",

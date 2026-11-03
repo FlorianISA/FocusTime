@@ -23,8 +23,9 @@ def session_data(client, sid):
     )
 
 
-def finalize_session(client, sid, actor):
-    """Appelé uniquement par le bouton admin. Vérifier le rôle à chaque appel."""
+def finalize_session(client, sid, actor, skip_degrees=()):
+    """Répartir les degrés choisis ; finaliser seulement si aucun degré n'est exclu."""
+    skip_degrees = set(skip_degrees)
     people = client.table("ft2_people").select("*").eq("email", actor).execute().data
     if len(people) != 1 or people[0]["degree"] != 4 or not people[0]["is_admin"]:
         raise PermissionError(
@@ -40,7 +41,26 @@ def finalize_session(client, sid, actor):
         raise AllocationError(
             "Des inscriptions viennent de changer. Cliquez à nouveau sur Répartir les élèves."
         )
+    roster = [pupil for pupil in roster if pupil["degree"] not in skip_degrees]
+    activities = [a for a in activities if a["degree"] not in skip_degrees]
+    activity_ids = {a["id"] for a in activities}
+    assignments = [a for a in assignments if a["activity_id"] in activity_ids]
     plan = allocate(roster, activities, assignments)
+    if skip_degrees:
+        if plan:
+            # One bulk insert is atomic and uses the existing assignment guards.
+            client.table("ft2_assignments").insert([
+                {
+                    **assignment,
+                    "session_id": sid,
+                    "activity_name": "pending",
+                    "period": 9,
+                    "source": "automatic",
+                    "created_by": actor.strip().lower(),
+                }
+                for assignment in plan
+            ]).execute()
+        return
     client.rpc(
         "ft2_finalize",
         {
