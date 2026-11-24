@@ -113,7 +113,11 @@ La suppression concerne la séance complète, ses activités, sa liste de partic
 
 Les professeurs voient uniquement « Inscrire un élève » et « Groupes par degré ». L’onglet « Répartition et Excel » est réservé à l’administrateur.
 
-Après sélection du degré puis de l’élève, les activités autorisées du bon degré, à une période libre, non complètes et de nom différent d’une activité déjà choisie sont proposées.
+Après sélection du degré, choisir un ou plusieurs élèves dans « Élèves ». La sélection affiche les noms et le degré, sans adresse mail. Les activités proposées sont compatibles avec tous les élèves sélectionnés : bon degré, période libre pour chacun et nom différent de leurs activités déjà choisies.
+
+Chaque activité est affichée dans un encadré : bleu (`st.info`) au-delà de 3 places restantes ou sans limite, orange (`st.warning`) de 1 à 3 places, rouge (`st.error`) lorsqu’elle est complète. Un petit bouton « Inscrire » à droite inscrit tous les élèves sélectionnés à cette activité. Il est désactivé si les places ne suffisent pas pour le groupe ou si les inscriptions sont fermées. Les élèves disposent des mêmes encadrés pour leur inscription personnelle lorsqu’elle est autorisée.
+
+L’inscription du groupe est enregistrée en une seule transaction avec les contrôles SQL existants. En cas de conflit ou de places devenues insuffisantes, aucun élève du groupe n’est ajouté. Les inscriptions existantes de chaque élève sélectionné restent visibles et annulables individuellement.
 
 Les capacités configurées sont appliquées dans l’interface et dans la base. Après une inscription ou une annulation, l’affichage se recharge automatiquement. Aucun bouton « Actualiser » n’est nécessaire ou présent.
 
@@ -182,4 +186,4 @@ node tests/test_database.mjs
 
 Node.js ne sert qu’à ces tests locaux et n’est pas nécessaire sur Community Cloud. Les résultats et limites sont dans `VALIDATION.md`.
 
-Les listes de sélection affichent des invitations en français (« Choisir un élève », « Choisir une activité », etc.). Les champs de date et les dates affichées utilisent le format jour/mois/année.
+Les listes de sélection affichent des invitations en français (« Choisir un ou plusieurs élèves », « Choisir une séance », etc.). Les champs de date et les dates affichées utilisent le format jour/mois/année.

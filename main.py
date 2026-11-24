@@ -11,7 +11,7 @@ from supabase import create_client
 from allocator import AllocationError
 from activity_import import activity_name, parse_activities
 from exports import excel_bytes
-from service import all_rows, finalize_session, session_data
+from service import all_rows, enroll_pupils, finalize_session, session_data
 
 ROOT = Path(__file__).parent
 TZ = ZoneInfo("Europe/Brussels")
@@ -53,7 +53,7 @@ def action(name, args):
 
 def pupil_label(address):
     pupil = roster_map[address]
-    return "{} · D{} · {}".format(pupil["name"], pupil["degree"], address)
+    return "{} · D{}".format(pupil["name"], pupil["degree"])
 
 
 def activity_details(activity):
@@ -67,11 +67,40 @@ def activity_label(aid):
     remaining = (
         "sans limite"
         if activity["capacity"] is None
-        else "{} place(s)".format(activity["capacity"] - counts[aid])
+        else "{} place(s) restante(s)".format(max(0, activity["capacity"] - counts[aid]))
     )
     return "P{} · {} · {}".format(
         activity["period"], activity_details(activity), remaining
     )
+
+
+def enrollment_button(activity, pupil_count=1, label="Inscrire"):
+    remaining = (
+        None
+        if activity["capacity"] is None
+        else activity["capacity"] - counts[activity["id"]]
+    )
+    details, button = st.columns([6, 1], vertical_alignment="center")
+    with details:
+        if remaining is None or remaining > 3:
+            st.info(activity_label(activity["id"]))
+        elif remaining > 0:
+            st.warning(activity_label(activity["id"]))
+        else:
+            st.error(activity_label(activity["id"]))
+    insufficient_places = remaining is not None and remaining < pupil_count
+    with button:
+        return st.button(
+            label,
+            key="enroll_{}".format(activity["id"]),
+            type="primary",
+            width="content",
+            disabled=not can_enroll or insufficient_places,
+            help=(
+                "Pas assez de places pour tous les élèves sélectionnés."
+                if insufficient_places else None
+            ),
+        )
 
 
 if not st.user.get("is_logged_in", False):
@@ -275,25 +304,19 @@ if not teacher:
             )
             and a["period"] not in occupied_periods
             and activity_name(a["name"]) not in chosen_names
-            and (a["capacity"] is None or counts[a["id"]] < a["capacity"])
         ]
         if compatible:
-            chosen = st.selectbox(
-                "Activité",
-                [a["id"] for a in compatible],
-                format_func=activity_label,
-                placeholder="Choisir une activité",
-            )
-            if st.button("M'inscrire", type="primary", disabled=not can_enroll):
-                action(
-                    "ft2_enroll",
-                    {
-                        "p_actor": email,
-                        "p_session": selected,
-                        "p_email": email,
-                        "p_activity": chosen,
-                    },
-                )
+            for activity in sorted(compatible, key=lambda a: (a["period"], a["name"].casefold())):
+                if enrollment_button(activity, label="M'inscrire"):
+                    action(
+                        "ft2_enroll",
+                        {
+                            "p_actor": email,
+                            "p_session": selected,
+                            "p_email": email,
+                            "p_activity": activity["id"],
+                        },
+                    )
         else:
             st.info("Aucune activité compatible disponible à une période libre.")
     st.stop()
@@ -508,17 +531,18 @@ with tab_enroll:
         [r for r in roster if r["degree"] == degree_filter],
         key=lambda r: r["name"].casefold(),
     )
-    pupil = st.selectbox(
-        "Élève",
+    pupils = st.multiselect(
+        "Élèves",
         [r["email"] for r in candidates],
-        index=None,
         format_func=pupil_label,
-        placeholder="Choisir un élève",
+        key=f"enroll_pupils_{selected}_{degree_filter}",
+        placeholder="Choisir un ou plusieurs élèves",
     )
-    if pupil:
-        for row in [a for a in assignments if a["email"] == pupil]:
+    if pupils:
+        for row in [a for a in assignments if a["email"] in pupils]:
             st.write(
-                "P{} · {}".format(
+                "{} · P{} · {}".format(
+                    pupil_label(row["email"]),
                     row["period"], activity_details(activity_map[row["activity_id"]])
                 )
             )
@@ -535,32 +559,33 @@ with tab_enroll:
                 a["kind"] == "remediation"
                 or session.get("allow_enrichment_enrollment", False)
             )
-            and a["degree"] == roster_map[pupil]["degree"]
-            and (a["capacity"] is None or counts[a["id"]] < a["capacity"])
-            and (pupil, a["period"]) not in occupied
-            and (pupil, activity_name(a["name"])) not in used
+            and a["degree"] == degree_filter
+            and all(
+                (pupil, a["period"]) not in occupied
+                and (pupil, activity_name(a["name"])) not in used
+                for pupil in pupils
+            )
         ]
         if not compatible:
             st.info(
-                "Aucune activité autorisée disponible pour ce degré, différente de celle déjà choisie et à une période libre."
+                "Aucune activité autorisée compatible avec tous les élèves sélectionnés : vérifiez les périodes libres et les activités déjà choisies."
             )
         else:
-            chosen = st.selectbox(
-                "Activité",
-                [a["id"] for a in compatible],
-                format_func=activity_label,
-                placeholder="Choisir une activité",
-            )
-            if st.button("Inscrire cet élève", type="primary", disabled=not can_enroll):
-                action(
-                    "ft2_enroll",
-                    {
-                        "p_actor": email,
-                        "p_session": selected,
-                        "p_email": pupil,
-                        "p_activity": chosen,
-                    },
+            if len(pupils) > 1:
+                st.caption(
+                    "Chaque bouton inscrit tous les élèves sélectionnés. Il est désactivé si les places restantes ne suffisent pas."
                 )
+            for activity in sorted(compatible, key=lambda a: (a["period"], a["name"].casefold())):
+                if enrollment_button(activity, pupil_count=len(pupils)):
+                    try:
+                        enroll_pupils(client, selected, email, pupils, activity["id"])
+                        st.session_state["notice"] = (
+                            "Élève inscrit." if len(pupils) == 1
+                            else f"{len(pupils)} élèves inscrits."
+                        )
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(error_message(exc))
 with tab_groups:
     view_degree = st.radio(
         "Degré",

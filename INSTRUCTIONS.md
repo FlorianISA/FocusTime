@@ -34,14 +34,16 @@ Selon les options choisies par l’administrateur, les élèves peuvent égaleme
 1. Choisir la bonne séance.
 2. Ouvrir l’onglet « Inscrire un élève ».
 3. Sélectionner le degré de l’élève.
-4. Choisir l’élève dans la liste « Élève ».
-5. Consulter ses éventuelles inscriptions déjà affichées.
-6. Choisir une activité dans la liste « Activité ». Vérifier la période, le nom, le professeur, le local et les places restantes.
-7. Cliquer sur « Inscrire cet élève ».
+4. Choisir un ou plusieurs élèves dans la sélection « Élèves ». Seuls le nom et le degré sont affichés, sans adresse mail.
+5. Consulter les éventuelles inscriptions déjà affichées pour chaque élève.
+6. Repérer l’encadré de l’activité souhaitée. Vérifier la période, le nom, le professeur, le local et les places restantes.
+7. Cliquer sur le petit bouton « Inscrire » à droite de l’activité pour inscrire tous les élèves sélectionnés.
 
-Une notification « Modification enregistrée. » confirme l’opération. L’affichage se met à jour automatiquement.
+Une notification confirme le nombre d’élèves inscrits. L’affichage se met à jour automatiquement. L’inscription du groupe est réalisée en une seule opération : en cas de conflit, aucun élève du groupe n’est ajouté.
 
-Seules les activités compatibles sont proposées : bon degré, période libre, places disponibles et nom différent de l’activité déjà choisie. Les dépassements apparaissent uniquement si leur inscription manuelle est autorisée pour cette séance.
+Seules les activités compatibles avec tous les élèves sélectionnés sont proposées : bon degré, période libre pour chacun et nom différent des activités déjà choisies. Les dépassements apparaissent uniquement si leur inscription manuelle est autorisée pour cette séance.
+
+Les encadrés sont bleus au-delà de 3 places restantes ou sans limite, orange de 1 à 3 places, et rouges lorsqu’il n’y a plus de place. Le bouton « Inscrire » est désactivé si le nombre de places ne suffit pas pour tous les élèves sélectionnés.
 
 Si aucune activité n’est proposée, vérifier les inscriptions existantes et contacter l’administrateur si une activité ou une capacité doit être ajoutée.
 

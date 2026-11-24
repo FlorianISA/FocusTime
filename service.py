@@ -23,6 +23,24 @@ def session_data(client, sid):
     )
 
 
+def enroll_pupils(client, sid, actor, pupils, activity_id):
+    """Inscrire le groupe en une transaction, avec les contrôles SQL existants."""
+    if not pupils:
+        raise ValueError("Sélectionnez au moins un élève.")
+    client.table("ft2_assignments").insert([
+        {
+            "session_id": sid,
+            "email": pupil,
+            "activity_id": activity_id,
+            "activity_name": "pending",
+            "period": 9,
+            "source": "teacher",
+            "created_by": actor.strip().lower(),
+        }
+        for pupil in pupils
+    ]).execute()
+
+
 def finalize_session(client, sid, actor, skip_degrees=()):
     """Répartir les degrés choisis ; finaliser seulement si aucun degré n'est exclu."""
     skip_degrees = set(skip_degrees)

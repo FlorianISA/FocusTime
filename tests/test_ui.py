@@ -100,6 +100,7 @@ class UiTests(unittest.TestCase):
     def render(
         self, info, generate=False, empty=False, students=False, enrichment=False,
         skip_degrees=(), regenerate=False, extra_degrees=False,
+        customize=None, interact=None,
     ):
         st.cache_resource.clear()
         data = copy.deepcopy(DATA)
@@ -120,6 +121,8 @@ class UiTests(unittest.TestCase):
                      period=p, kind="depassement", degree=d, capacity=12)
                 for d in (1, 3) for p in (9, 10)
             ])
+        if customize:
+            customize(data)
         client = SimpleNamespace(table=lambda table: Query(table, data))
 
         def finalize(_client, sid, actor, skip_degrees=()):
@@ -144,7 +147,9 @@ class UiTests(unittest.TestCase):
 
         with patch("streamlit.user_info._get_user_info", return_value=info), patch(
             "supabase.create_client", return_value=client
-        ), patch("service.finalize_session", side_effect=finalize) as finalizer:
+        ), patch("service.finalize_session", side_effect=finalize) as finalizer, patch(
+            "service.enroll_pupils"
+        ) as enrollment:
             at = AppTest.from_file(str(Path(__file__).parents[1] / "main.py"))
             at.secrets["SUPABASE_URL"] = "https://example.supabase.co"
             at.secrets["SUPABASE_SERVICE_ROLE_KEY"] = "fake-key"
@@ -187,6 +192,9 @@ class UiTests(unittest.TestCase):
                         if field.label == f"D{skip_degrees[0]}"
                     ).check().run(timeout=10)
                     self.assertEqual(len(at.get("download_button")), 1)
+            if interact:
+                interact(at, enrollment)
+                self.assertEqual(list(at.exception), [])
             return at
 
     def test_logged_out(self):
@@ -282,7 +290,7 @@ class UiTests(unittest.TestCase):
         )
         self.assertEqual(
             [field.label for field in at.multiselect],
-            ["Degrés participants", "Périodes proposées"],
+            ["Degrés participants", "Périodes proposées", "Élèves"],
         )
         delete = next(
             b for b in at.button if b.label == "Supprimer définitivement cette séance"
@@ -309,3 +317,115 @@ class UiTests(unittest.TestCase):
     def test_student_cannot_choose_enrichment_with_only_student_option(self):
         at = self.render({"is_logged_in": True, "email": "student@test"}, students=True)
         self.assertNotIn("M'inscrire", [b.label for b in at.button])
+
+    @staticmethod
+    def enrollment_data(data):
+        data["ft2_sessions"][0]["closes_at"] = (NOW + timedelta(days=1)).isoformat()
+        data["ft2_roster"].extend([
+            dict(session_id=1, email="second@test", name="Autre élève", degree=2),
+            dict(session_id=1, email="full@test", name="Élève déjà inscrit", degree=2),
+            dict(session_id=1, email="d3@test", name="Élève D3", degree=3),
+        ])
+        data["ft2_activities"][0]["capacity"] = 4
+        data["ft2_activities"][1]["kind"] = "remediation"
+        data["ft2_activities"].extend([
+            dict(data["ft2_activities"][0], id=3, name="Trois places", capacity=3),
+            dict(data["ft2_activities"][0], id=4, name="Dernière place", capacity=1),
+            dict(data["ft2_activities"][0], id=5, name="Complet", capacity=1),
+        ])
+        data["ft2_assignments"] = [
+            dict(data["ft2_assignments"][0], email="full@test", activity_id=5)
+        ]
+
+    def test_teacher_multiselect_and_capacity_cards(self):
+        def interact(at, enrollment):
+            pupils = at.multiselect[0]
+            self.assertEqual(pupils.label, "Élèves")
+            self.assertTrue(all("@" not in option for option in pupils.options))
+            self.assertNotIn("Élève D3 · D3", pupils.options)
+            pupils.set_value(["student@test", "second@test"]).run()
+            self.assertNotIn("Activité", [field.label for field in at.selectbox])
+            self.assertTrue(any("Math" in item.value and "4 place(s)" in item.value for item in at.info))
+            self.assertTrue(any("Étude" in item.value and "sans limite" in item.value for item in at.info))
+            self.assertTrue(any("Trois places" in item.value for item in at.warning))
+            self.assertTrue(any("Dernière place" in item.value for item in at.warning))
+            self.assertTrue(any("Complet" in item.value and "0 place(s)" in item.value for item in at.error))
+            self.assertFalse(at.button(key="enroll_1").disabled)
+            self.assertFalse(at.button(key="enroll_2").disabled)
+            self.assertFalse(at.button(key="enroll_3").disabled)
+            self.assertTrue(at.button(key="enroll_4").disabled)
+            self.assertTrue(at.button(key="enroll_5").disabled)
+            enrollment.assert_not_called()
+            at.button(key="enroll_3").click().run()
+            enrollment.assert_called_once()
+            self.assertEqual(
+                enrollment.call_args.args[1:],
+                (1, "prof@test", ["student@test", "second@test"], 3),
+            )
+
+        self.render(
+            {"is_logged_in": True, "email": "prof@test"},
+            customize=self.enrollment_data, interact=interact,
+        )
+
+    def test_group_activities_respect_every_pupils_assignments(self):
+        def customize(data):
+            self.enrollment_data(data)
+            data["ft2_assignments"].append(
+                dict(DATA["ft2_assignments"][0], id=2, email="second@test")
+            )
+            data["ft2_activities"].append(
+                dict(data["ft2_activities"][0], id=6, name=" MATH ", period=10)
+            )
+
+        def interact(at, enrollment):
+            at.multiselect[0].set_value(["student@test", "second@test"]).run()
+            self.assertEqual([b.key for b in at.button if b.label == "Inscrire"], ["enroll_2"])
+            self.assertTrue(any("Autre élève" in item.value for item in at.markdown))
+            self.assertEqual(len([b for b in at.button if b.label == "Annuler cette inscription"]), 1)
+            at.multiselect[0].set_value(["student@test"]).run()
+            self.assertFalse(at.button(key="enroll_1").disabled)
+            self.assertFalse(at.button(key="enroll_4").disabled)
+            self.assertFalse(at.button(key="enroll_6").disabled)
+            enrollment.assert_not_called()
+
+        self.render(
+            {"is_logged_in": True, "email": "prof@test"},
+            customize=customize, interact=interact,
+        )
+
+    def test_group_enrollment_error_is_displayed_without_success(self):
+        def interact(at, enrollment):
+            at.multiselect[0].set_value(["student@test", "second@test"]).run()
+            enrollment.side_effect = ValueError("Le groupe est complet.")
+            at.button(key="enroll_1").click().run()
+            self.assertTrue(any(item.value == "Le groupe est complet." for item in at.error))
+            self.assertEqual(list(at.toast), [])
+
+        self.render(
+            {"is_logged_in": True, "email": "prof@test"},
+            customize=self.enrollment_data, interact=interact,
+        )
+
+    def test_closed_enrollment_and_student_full_cards(self):
+        def closed(data):
+            self.enrollment_data(data)
+            data["ft2_sessions"][0]["closes_at"] = (NOW - timedelta(days=1)).isoformat()
+
+        def interact(at, enrollment):
+            at.multiselect[0].set_value(["student@test"]).run()
+            self.assertTrue(all(b.disabled for b in at.button if b.label == "Inscrire"))
+            enrollment.assert_not_called()
+
+        self.render(
+            {"is_logged_in": True, "email": "prof@test"},
+            customize=closed, interact=interact,
+        )
+        at = self.render(
+            {"is_logged_in": True, "email": "student@test"},
+            students=True, customize=self.enrollment_data,
+        )
+        self.assertNotIn("Activité", [field.label for field in at.selectbox])
+        self.assertTrue(any("Complet" in item.value for item in at.error))
+        self.assertTrue(at.button(key="enroll_5").disabled)
+        self.assertFalse(at.button(key="enroll_4").disabled)
