@@ -39,7 +39,7 @@ Selon les options choisies par l’administrateur, les élèves peuvent égaleme
 6. Repérer l’encadré de l’activité souhaitée. Vérifier la période, le nom, le professeur, le local et les places restantes.
 7. Cliquer sur le bouton « Inscrire » à droite de l’activité pour inscrire tous les élèves sélectionnés.
 
-Un séparateur figure sous la sélection d’élèves et entre les activités de P9 et de P10. Le professeur et le local sont indiqués entre parenthèses en italique après le nom de l’activité.
+Un séparateur figure sous la sélection d’élèves. Les titres P9 et P10 sont affichés au-dessus des séparateurs de leurs activités ; la période n’est pas répétée dans les encadrés de sélection. Le professeur et le local sont indiqués entre parenthèses en italique après le nom de l’activité, séparés par un simple espace.
 
 Une notification confirme le nombre d’élèves inscrits. L’affichage se met à jour automatiquement. L’inscription du groupe est réalisée en une seule opération : en cas de conflit, aucun élève du groupe n’est ajouté.
 

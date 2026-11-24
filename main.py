@@ -56,7 +56,7 @@ def pupil_label(address):
 
 
 def activity_details(activity):
-    return "{} *({} · {})*".format(
+    return "{} *({} {})*".format(
         activity["name"], activity["professor"], activity["room"]
     )
 
@@ -69,9 +69,7 @@ def activity_label(aid):
         places = max(0, activity["capacity"] - counts[aid])
         plural = "s" if places > 1 else ""
         remaining = f"{places} place{plural} restante{plural}"
-    return "P{} · {} · {}".format(
-        activity["period"], activity_details(activity), remaining
-    )
+    return "{} · {}".format(activity_details(activity), remaining)
 
 
 def enrollment_button(activity, pupil_count=1, label="Inscrire"):
@@ -308,7 +306,8 @@ if not teacher:
         if compatible:
             previous_period = None
             for activity in sorted(compatible, key=lambda a: (a["period"], a["name"].casefold())):
-                if previous_period is not None and activity["period"] != previous_period:
+                if activity["period"] != previous_period:
+                    st.subheader("P{}".format(activity["period"]))
                     st.divider()
                 previous_period = activity["period"]
                 if enrollment_button(activity, label="M'inscrire"):
@@ -582,7 +581,8 @@ with tab_enroll:
                 )
             previous_period = None
             for activity in sorted(compatible, key=lambda a: (a["period"], a["name"].casefold())):
-                if previous_period is not None and activity["period"] != previous_period:
+                if activity["period"] != previous_period:
+                    st.subheader("P{}".format(activity["period"]))
                     st.divider()
                 previous_period = activity["period"]
                 if enrollment_button(activity, pupil_count=len(pupils)):
@@ -608,8 +608,8 @@ with tab_groups:
     ):
         st.subheader(label)
         for period in (9, 10):
-            if period == 10:
-                st.divider()
+            st.markdown(f"**P{period}**")
+            st.divider()
             groups = sorted(
                 [
                     a
