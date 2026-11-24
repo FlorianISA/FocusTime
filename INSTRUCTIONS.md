@@ -34,10 +34,12 @@ Selon les options choisies par l’administrateur, les élèves peuvent égaleme
 1. Choisir la bonne séance.
 2. Ouvrir l’onglet « Inscrire un élève ».
 3. Sélectionner le degré de l’élève.
-4. Choisir un ou plusieurs élèves dans la sélection « Élèves ». Seuls le nom et le degré sont affichés, sans adresse mail.
+4. Choisir un ou plusieurs élèves dans la sélection « Élèves ». Seul le nom est affiché, sans degré ni adresse mail.
 5. Consulter les éventuelles inscriptions déjà affichées pour chaque élève.
 6. Repérer l’encadré de l’activité souhaitée. Vérifier la période, le nom, le professeur, le local et les places restantes.
-7. Cliquer sur le petit bouton « Inscrire » à droite de l’activité pour inscrire tous les élèves sélectionnés.
+7. Cliquer sur le bouton « Inscrire » à droite de l’activité pour inscrire tous les élèves sélectionnés.
+
+Un séparateur figure sous la sélection d’élèves et entre les activités de P9 et de P10. Le professeur et le local sont indiqués entre parenthèses en italique après le nom de l’activité.
 
 Une notification confirme le nombre d’élèves inscrits. L’affichage se met à jour automatiquement. L’inscription du groupe est réalisée en une seule opération : en cas de conflit, aucun élève du groupe n’est ajouté.
 

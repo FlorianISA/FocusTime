@@ -113,9 +113,11 @@ La suppression concerne la séance complète, ses activités, sa liste de partic
 
 Les professeurs voient uniquement « Inscrire un élève » et « Groupes par degré ». L’onglet « Répartition et Excel » est réservé à l’administrateur.
 
-Après sélection du degré, choisir un ou plusieurs élèves dans « Élèves ». La sélection affiche les noms et le degré, sans adresse mail. Les activités proposées sont compatibles avec tous les élèves sélectionnés : bon degré, période libre pour chacun et nom différent de leurs activités déjà choisies.
+Après sélection du degré, choisir un ou plusieurs élèves dans « Élèves ». La sélection affiche uniquement les noms, sans degré ni adresse mail. Les activités proposées sont compatibles avec tous les élèves sélectionnés : bon degré, période libre pour chacun et nom différent de leurs activités déjà choisies.
 
-Chaque activité est affichée dans un encadré : bleu (`st.info`) au-delà de 3 places restantes ou sans limite, orange (`st.warning`) de 1 à 3 places, rouge (`st.error`) lorsqu’elle est complète. Un petit bouton « Inscrire » à droite inscrit tous les élèves sélectionnés à cette activité. Il est désactivé si les places ne suffisent pas pour le groupe ou si les inscriptions sont fermées. Les élèves disposent des mêmes encadrés pour leur inscription personnelle lorsqu’elle est autorisée.
+Chaque activité est affichée dans un encadré : bleu (`st.info`) au-delà de 3 places restantes ou sans limite, orange (`st.warning`) de 1 à 3 places, rouge (`st.error`) lorsqu’elle est complète. Un bouton « Inscrire » à droite inscrit tous les élèves sélectionnés à cette activité. Il est désactivé si les places ne suffisent pas pour le groupe ou si les inscriptions sont fermées. Les élèves disposent des mêmes encadrés pour leur inscription personnelle lorsqu’elle est autorisée.
+
+Des séparateurs (`st.divider`) figurent sous la sélection d’élèves et entre les activités de P9 et de P10. Le professeur et le local sont indiqués entre parenthèses en italique après le nom de l’activité. Le nombre de places restantes s’accorde au singulier ou au pluriel.
 
 L’inscription du groupe est enregistrée en une seule transaction avec les contrôles SQL existants. En cas de conflit ou de places devenues insuffisantes, aucun élève du groupe n’est ajouté. Les inscriptions existantes de chaque élève sélectionné restent visibles et annulables individuellement.
 

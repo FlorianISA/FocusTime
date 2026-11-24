@@ -52,23 +52,23 @@ def action(name, args):
 
 
 def pupil_label(address):
-    pupil = roster_map[address]
-    return "{} · D{}".format(pupil["name"], pupil["degree"])
+    return roster_map[address]["name"]
 
 
 def activity_details(activity):
-    return "{} · {} · {}".format(
+    return "{} *({} · {})*".format(
         activity["name"], activity["professor"], activity["room"]
     )
 
 
 def activity_label(aid):
     activity = activity_map[aid]
-    remaining = (
-        "sans limite"
-        if activity["capacity"] is None
-        else "{} place(s) restante(s)".format(max(0, activity["capacity"] - counts[aid]))
-    )
+    if activity["capacity"] is None:
+        remaining = "sans limite"
+    else:
+        places = max(0, activity["capacity"] - counts[aid])
+        plural = "s" if places > 1 else ""
+        remaining = f"{places} place{plural} restante{plural}"
     return "P{} · {} · {}".format(
         activity["period"], activity_details(activity), remaining
     )
@@ -80,7 +80,7 @@ def enrollment_button(activity, pupil_count=1, label="Inscrire"):
         if activity["capacity"] is None
         else activity["capacity"] - counts[activity["id"]]
     )
-    details, button = st.columns([6, 1], vertical_alignment="center")
+    details, button = st.columns([5, 1], vertical_alignment="center")
     with details:
         if remaining is None or remaining > 3:
             st.info(activity_label(activity["id"]))
@@ -94,7 +94,7 @@ def enrollment_button(activity, pupil_count=1, label="Inscrire"):
             label,
             key="enroll_{}".format(activity["id"]),
             type="primary",
-            width="content",
+            width="stretch",
             disabled=not can_enroll or insufficient_places,
             help=(
                 "Pas assez de places pour tous les élèves sélectionnés."
@@ -306,7 +306,11 @@ if not teacher:
             and activity_name(a["name"]) not in chosen_names
         ]
         if compatible:
+            previous_period = None
             for activity in sorted(compatible, key=lambda a: (a["period"], a["name"].casefold())):
+                if previous_period is not None and activity["period"] != previous_period:
+                    st.divider()
+                previous_period = activity["period"]
                 if enrollment_button(activity, label="M'inscrire"):
                     action(
                         "ft2_enroll",
@@ -538,6 +542,7 @@ with tab_enroll:
         key=f"enroll_pupils_{selected}_{degree_filter}",
         placeholder="Choisir un ou plusieurs élèves",
     )
+    st.divider()
     if pupils:
         for row in [a for a in assignments if a["email"] in pupils]:
             st.write(
@@ -575,7 +580,11 @@ with tab_enroll:
                 st.caption(
                     "Chaque bouton inscrit tous les élèves sélectionnés. Il est désactivé si les places restantes ne suffisent pas."
                 )
+            previous_period = None
             for activity in sorted(compatible, key=lambda a: (a["period"], a["name"].casefold())):
+                if previous_period is not None and activity["period"] != previous_period:
+                    st.divider()
+                previous_period = activity["period"]
                 if enrollment_button(activity, pupil_count=len(pupils)):
                     try:
                         enroll_pupils(client, selected, email, pupils, activity["id"])
@@ -600,7 +609,7 @@ with tab_groups:
         st.subheader(label)
         for period in (9, 10):
             if period == 10:
-                st.markdown("")
+                st.divider()
             groups = sorted(
                 [
                     a
