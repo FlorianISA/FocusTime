@@ -582,7 +582,8 @@ with tab_enroll:
             previous_period = None
             for activity in sorted(compatible, key=lambda a: (a["period"], a["name"].casefold())):
                 if activity["period"] != previous_period:
-                    st.divider()
+                    if previous_period is not None:
+                        st.divider()
                     st.subheader("P{}".format(activity["period"]))
                 previous_period = activity["period"]
                 if enrollment_button(activity, pupil_count=len(pupils)):
