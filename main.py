@@ -56,7 +56,7 @@ def pupil_label(address):
 
 
 def activity_details(activity):
-    return "{} *({} {})*".format(
+    return "{} *({}\u00a0\u00a0{})*".format(
         activity["name"], activity["professor"], activity["room"]
     )
 
@@ -307,8 +307,8 @@ if not teacher:
             previous_period = None
             for activity in sorted(compatible, key=lambda a: (a["period"], a["name"].casefold())):
                 if activity["period"] != previous_period:
-                    st.subheader("P{}".format(activity["period"]))
                     st.divider()
+                    st.subheader("P{}".format(activity["period"]))
                 previous_period = activity["period"]
                 if enrollment_button(activity, label="M'inscrire"):
                     action(
@@ -582,8 +582,8 @@ with tab_enroll:
             previous_period = None
             for activity in sorted(compatible, key=lambda a: (a["period"], a["name"].casefold())):
                 if activity["period"] != previous_period:
-                    st.subheader("P{}".format(activity["period"]))
                     st.divider()
+                    st.subheader("P{}".format(activity["period"]))
                 previous_period = activity["period"]
                 if enrollment_button(activity, pupil_count=len(pupils)):
                     try:
@@ -608,8 +608,8 @@ with tab_groups:
     ):
         st.subheader(label)
         for period in (9, 10):
-            st.markdown(f"**P{period}**")
             st.divider()
+            st.markdown(f"**P{period}**")
             groups = sorted(
                 [
                     a

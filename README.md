@@ -117,7 +117,7 @@ Après sélection du degré, choisir un ou plusieurs élèves dans « Élèves �
 
 Chaque activité est affichée dans un encadré : bleu (`st.info`) au-delà de 3 places restantes ou sans limite, orange (`st.warning`) de 1 à 3 places, rouge (`st.error`) lorsqu’elle est complète. Un bouton « Inscrire » à droite inscrit tous les élèves sélectionnés à cette activité. Il est désactivé si les places ne suffisent pas pour le groupe ou si les inscriptions sont fermées. Les élèves disposent des mêmes encadrés pour leur inscription personnelle lorsqu’elle est autorisée.
 
-Un séparateur (`st.divider`) figure sous la sélection d’élèves. Les activités sont regroupées sous les titres P9 et P10, chacun au-dessus d’un séparateur ; la période n’est pas répétée dans les encadrés de sélection. Le professeur et le local sont indiqués entre parenthèses en italique après le nom de l’activité, séparés par un simple espace. Le nombre de places restantes s’accorde au singulier ou au pluriel.
+Un séparateur (`st.divider`) figure sous la sélection d’élèves. Les activités sont regroupées sous les titres P9 et P10, chacun en dessous d’un séparateur ; la période n’est pas répétée dans les encadrés de sélection. Le professeur et le local sont indiqués entre parenthèses en italique après le nom de l’activité, séparés par deux espaces. Le nombre de places restantes s’accorde au singulier ou au pluriel.
 
 L’inscription du groupe est enregistrée en une seule transaction avec les contrôles SQL existants. En cas de conflit ou de places devenues insuffisantes, aucun élève du groupe n’est ajouté. Les inscriptions existantes de chaque élève sélectionné restent visibles et annulables individuellement.
 
